@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.MediaType;
+import okhttp3.MultipartBody;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
@@ -63,6 +64,58 @@ class ImajEventsServiceClient
 		post(baseUrl, "/api/v1/events", token, payload, EmptyResponse.class,
 			ignored -> log.debug("Imaj's Events notification accepted"),
 			error -> log.debug("Imaj's Events notification failed: {}", error));
+	}
+
+	void sendEvent(String baseUrl, String token, Map<String, Object> payload, byte[] screenshot)
+	{
+		if (screenshot == null || screenshot.length == 0)
+		{
+			sendEvent(baseUrl, token, payload);
+			return;
+		}
+		final String url;
+		try
+		{
+			url = ServiceUrls.endpoint(baseUrl, "/api/v1/events");
+		}
+		catch (IllegalArgumentException ex)
+		{
+			log.debug("Imaj's Events screenshot notification failed: {}", ex.getMessage());
+			return;
+		}
+
+		RequestBody body = new MultipartBody.Builder()
+			.setType(MultipartBody.FORM)
+			.addFormDataPart("payload_json", gson.toJson(payload))
+			.addFormDataPart("file", "completion.jpg",
+				RequestBody.create(MediaType.parse("image/jpeg"), screenshot))
+			.build();
+		Request request = new Request.Builder()
+			.url(url)
+			.header("Accept", "application/json")
+			.header("Authorization", "Bearer " + token)
+			.post(body)
+			.build();
+		httpClient.newCall(request).enqueue(new Callback()
+		{
+			@Override
+			public void onFailure(Call call, IOException e)
+			{
+				log.debug("Imaj's Events screenshot notification could not reach the service");
+			}
+
+			@Override
+			public void onResponse(Call call, Response response)
+			{
+				try (Response closeable = response)
+				{
+					if (!closeable.isSuccessful())
+					{
+						log.debug("Imaj's Events screenshot notification rejected ({})", closeable.code());
+					}
+				}
+			}
+		});
 	}
 
 	private <T> void post(String baseUrl, String path, String token, Object payload, Class<T> responseType,
