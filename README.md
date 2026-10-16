@@ -12,9 +12,9 @@ The competition service can independently enable:
 - Level-up notifications
 - Player-death notifications
 - Kill-count and completion notifications
-- A combined equipment-plus-inventory Jagex guide-value total when a kill count/completion is detected
+- A combined equipment-plus-inventory risk-value total when a kill count/completion is detected
 - Opt-in completion screenshots
-- Opt-in Special Kills with starting/ending screenshots, guide values, and the game's official completion time
+- Opt-in Special Kills with starting/ending screenshots, risk values, and the game's official completion time
 - Speedrun time notifications from game-generated completion messages
 - Custom system/game-message rules using case-insensitive `*` wildcards
 
@@ -31,11 +31,11 @@ The competition profile controls two server-owned lists:
 
 Rules accept exact item names, numeric item IDs, or case-insensitive `*` wildcards such as `Godsword shard *`. The minimum loot value is applied to each individual item stack using the competition's item-value rules, not the combined drop.
 
-## Setup guide values and screenshots
+## Setup risk values and screenshots
 
-Item values use the following priority throughout the plugin: an organizer-defined `itemValueOverrides` entry first; RuneLite's current GE/actively traded value for tradeable items second; and the built-in Jagex item-definition guide value for untradeables or missing GE values last. Override keys may be an exact case-insensitive item name or canonical numeric item ID, with the ID taking priority. For example, `"Infernal max cape": 225000` replaces RuneLite's current built-in `99000` value for that item.
+Item values use the following priority throughout the plugin: an organizer-defined `itemValueOverrides` entry first; RuneLite's current market value second; and the built-in Jagex item-definition guide value only when RuneLite has no market value. RuneLite's `ItemMapping` is applied even when the equipped item is untradeable, matching tradeable counterparts/components used for risk valuation. For example, Ferocious gloves use Hydra leather's current value and Amulet of rancour (s) uses the normal Amulet of rancour's current value. Override keys may be an exact case-insensitive item name or canonical numeric item ID, with the ID taking priority. An override remains available for items that have no suitable RuneLite mapping.
 
-When setup capture is enabled, the KC webhook text does not display its equipment-plus-inventory value. Its screenshot audit panel lists every line as quantity × unit value = line total and labels the source as `[override]`, `[GE]`, or `[guide]`, so the calculation can be checked without transmitting the item breakdown as event data.
+When setup capture is enabled, the KC webhook text does not display its equipment-plus-inventory value. Its screenshot audit panel lists every line as quantity × unit value = line total and labels the source as `[override]`, `[GE]`, `[mapped]`, or `[guide]`, so the calculation can be checked without transmitting the item breakdown as event data. `[mapped]` means an untradeable item was valued through RuneLite's tradeable counterpart/component mapping.
 
 Screenshots require both sides to opt in. Completion screenshots require organizer permission plus the player's **Upload completion screenshots** switch. Loot screenshots use a separate organizer permission and local **Upload loot screenshots** switch; one captured frame is attached to the grouped source message. Setup screenshots include the total and its equipment/inventory line-item audit. Chat and private-message widgets are hidden during capture by default.
 
@@ -44,9 +44,9 @@ Screenshots require both sides to opt in. Completion screenshots require organiz
 Special Kill is inactive unless the player explicitly uses the side panel:
 
 1. Enter the boss name as it appears in the boss's game-generated KC message.
-2. Press **Start Special Kill** to capture the starting frame and combined guide value.
+2. Press **Start Special Kill** to capture the starting frame and combined risk value.
 3. Complete that selected boss. Other boss completions do not end the attempt.
-4. The matching KC message captures the ending frame and value. The report waits for the game's `Duration`, `Challenge time`, `Completion time`, `Speedrun duration`, or `Subdued in` chat line, then sends that official time with both screenshots and guide totals.
+4. The matching KC message captures the ending frame and value. The report waits for the game's `Duration`, `Challenge time`, `Completion time`, `Speedrun duration`, or `Subdued in` chat line, then sends that official time with both screenshots and risk totals.
 
 The Special Kill report replaces the ordinary KC report so Discord does not receive a duplicate. The player can cancel an active attempt at any time, and restarting RuneLite clears it.
 
@@ -79,7 +79,7 @@ The plugin evaluates only RuneLite `GAMEMESSAGE` and `SPAM` system-message types
 
 ## Privacy
 
-The network connection is opt-in and disabled by default. When enabled, requests necessarily disclose the user's IP address to the configured Imaj's Events service. Enrollment sends the participant-entered competition name, password, and RSN. Event requests send the enabled event details and can include combined setup guide-value totals and optional game screenshots. Special Kill sends its selected boss, the official game-generated completion time, starting/ending guide totals, and two screenshots.
+The network connection is opt-in and disabled by default. When enabled, requests necessarily disclose the user's IP address to the configured Imaj's Events service. Enrollment sends the participant-entered competition name, password, and RSN. Event requests send the enabled event details and can include combined setup risk-value totals and optional game screenshots. Special Kill sends its selected boss, the official game-generated completion time, starting/ending risk totals, and two screenshots.
 
 The plugin does not read the currently logged-in RuneScape name and does not inspect or modify another plugin's configuration.
 
