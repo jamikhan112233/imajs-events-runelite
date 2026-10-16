@@ -80,7 +80,7 @@ class ImajEventsServiceClient
 		}
 		catch (IllegalArgumentException ex)
 		{
-			log.debug("Imaj's Events screenshot notification failed: {}", ex.getMessage());
+			log.warn("Imaj's Events screenshot notification failed: {}", ex.getMessage());
 			return;
 		}
 
@@ -101,7 +101,7 @@ class ImajEventsServiceClient
 			@Override
 			public void onFailure(Call call, IOException e)
 			{
-				log.debug("Imaj's Events screenshot notification could not reach the service");
+				log.warn("Imaj's Events screenshot notification could not reach the service", e);
 			}
 
 			@Override
@@ -109,10 +109,18 @@ class ImajEventsServiceClient
 			{
 				try (Response closeable = response)
 				{
+					String responseBody = closeable.body() == null ? "" : closeable.body().string();
 					if (!closeable.isSuccessful())
 					{
-						log.debug("Imaj's Events screenshot notification rejected ({})", closeable.code());
+						log.warn("Imaj's Events screenshot notification rejected ({}): {}",
+							closeable.code(), responseBody);
+						return;
 					}
+					log.debug("Imaj's Events screenshot notification accepted");
+				}
+				catch (IOException ex)
+				{
+					log.warn("Unable to read the Imaj's Events screenshot response", ex);
 				}
 			}
 		});
