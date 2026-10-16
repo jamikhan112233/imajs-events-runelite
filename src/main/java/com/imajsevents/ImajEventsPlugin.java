@@ -91,6 +91,9 @@ public class ImajEventsPlugin extends Plugin
 	private ImajEventsPanel panel;
 	private NavigationButton navigationButton;
 	private int profileRefreshTicks;
+	private volatile boolean specialKillPreparing;
+	private volatile SpecialKillAttempt specialKillAttempt;
+	private volatile long specialKillGeneration;
 
 	@Override
 	protected void startUp()
@@ -113,6 +116,9 @@ public class ImajEventsPlugin extends Plugin
 	{
 		observedLevels.clear();
 		profileRefreshTicks = 0;
+		specialKillPreparing = false;
+		specialKillAttempt = null;
+		specialKillGeneration++;
 		if (navigationButton != null)
 		{
 			clientToolbar.removeNavigation(navigationButton);
@@ -170,6 +176,65 @@ public class ImajEventsPlugin extends Plugin
 			}, error -> onUi(() -> failure.accept(error)));
 	}
 
+	void startSpecialKill(String boss, Consumer<String> success, Consumer<String> failure)
+	{
+		String selectedBoss = boss == null ? "" : boss.trim();
+		if (!isConnected())
+		{
+			failure.accept("Enroll first");
+			return;
+		}
+		if (!profile.isSpecialKillEnabled())
+		{
+			failure.accept("Special Kill is disabled for this competition");
+			return;
+		}
+		if (!config.completionScreenshots())
+		{
+			failure.accept("Enable Upload completion screenshots first");
+			return;
+		}
+		if (selectedBoss.isEmpty())
+		{
+			failure.accept("Enter the boss name shown in its KC message");
+			return;
+		}
+		if (specialKillPreparing || specialKillAttempt != null)
+		{
+			failure.accept("Cancel the current Special Kill first");
+			return;
+		}
+
+		specialKillPreparing = true;
+		long generation = ++specialKillGeneration;
+		clientThread.invokeLater(() -> {
+			long startingGuideValue = currentSetupGuideValue();
+			captureScreenshot(startingGuideValue, "Special Kill — starting setup", screenshot -> {
+				if (generation != specialKillGeneration)
+				{
+					return;
+				}
+				specialKillPreparing = false;
+				specialKillAttempt = new SpecialKillAttempt(selectedBoss, startingGuideValue, screenshot);
+				onUi(() -> success.accept("Recording " + selectedBoss + " — waiting for its KC message"));
+			}, error -> {
+				if (generation != specialKillGeneration)
+				{
+					return;
+				}
+				specialKillPreparing = false;
+				onUi(() -> failure.accept(error));
+			});
+		});
+	}
+
+	void cancelSpecialKill()
+	{
+		specialKillPreparing = false;
+		specialKillAttempt = null;
+		specialKillGeneration++;
+	}
+
 	@Subscribe
 	public void onLootReceived(LootReceived event)
 	{
@@ -189,7 +254,7 @@ public class ImajEventsPlugin extends Plugin
 		}
 
 		String message = Text.removeTags(event.getMessage()).trim();
-		if (profile.isKillCountEnabled())
+		if (profile.isKillCountEnabled() || specialKillAttempt != null)
 		{
 			Matcher kc = KC_PATTERN.matcher(message);
 			if (!kc.find())
@@ -201,7 +266,11 @@ public class ImajEventsPlugin extends Plugin
 				try
 				{
 					int count = Integer.parseInt(kc.group("kc").replace(",", ""));
-					sendKillCount(kc.group("boss").trim(), count);
+					String boss = kc.group("boss").trim();
+					if (!finishSpecialKillIfMatched(boss, count) && profile.isKillCountEnabled())
+					{
+						sendKillCount(boss, count);
+					}
 				}
 				catch (NumberFormatException ex)
 				{
@@ -211,11 +280,15 @@ public class ImajEventsPlugin extends Plugin
 			}
 		}
 
-		if (profile.isSpeedrunEnabled())
+		if (profile.isSpeedrunEnabled() || specialKillAttempt != null)
 		{
 			Matcher speedrun = SPEEDRUN_PATTERN.matcher(message);
 			if (speedrun.find())
 			{
+				if (recordSpecialKillGameTime(speedrun.group("time"), message))
+				{
+					return;
+				}
 				Map<String, Object> payload = baseEvent("SPEEDRUN");
 				payload.put("label", speedrun.group("label"));
 				payload.put("duration", speedrun.group("time"));
@@ -289,20 +362,17 @@ public class ImajEventsPlugin extends Plugin
 		Map<String, Object> payload = baseEvent("KILL_COUNT");
 		payload.put("source", source);
 		payload.put("killCount", killCount);
+		Long setupGuideValue = null;
 		if (profile.isSetupCaptureEnabled())
 		{
-			SetupPart equipment = serializeContainer(InventoryID.WORN);
-			SetupPart inventory = serializeContainer(InventoryID.INV);
-			payload.put("equipment", equipment.items);
-			payload.put("inventory", inventory.items);
-			payload.put("equipmentValue", equipment.value);
-			payload.put("inventoryValue", inventory.value);
-			payload.put("setupTotalValue", equipment.value + inventory.value);
+			setupGuideValue = currentSetupGuideValue();
+			payload.put("setupTotalValue", setupGuideValue);
+			payload.put("priceBasis", "Jagex guide price");
 		}
 
 		if (profile.isKillCountScreenshotsEnabled() && config.completionScreenshots())
 		{
-			captureAndSend(payload);
+			captureAndSend(payload, setupGuideValue, "Completion setup");
 		}
 		else
 		{
@@ -310,14 +380,18 @@ public class ImajEventsPlugin extends Plugin
 		}
 	}
 
-	private SetupPart serializeContainer(int inventoryId)
+	private long currentSetupGuideValue()
+	{
+		return containerGuideValue(InventoryID.WORN) + containerGuideValue(InventoryID.INV);
+	}
+
+	private long containerGuideValue(int inventoryId)
 	{
 		ItemContainer container = client.getItemContainer(inventoryId);
-		List<Map<String, Object>> result = new ArrayList<>();
 		long total = 0;
 		if (container == null)
 		{
-			return new SetupPart(result, total);
+			return total;
 		}
 		for (Item item : container.getItems())
 		{
@@ -326,22 +400,25 @@ public class ImajEventsPlugin extends Plugin
 				continue;
 			}
 			int canonicalId = itemManager.canonicalize(item.getId());
-			long unitPrice = canonicalId == 995 ? 1L : canonicalId == 13204 ? 1000L
-				: itemManager.getItemPrice(canonicalId);
-			long value = (long) unitPrice * item.getQuantity();
-			total += value;
-			Map<String, Object> serialized = new LinkedHashMap<>();
-			serialized.put("itemId", canonicalId);
-			serialized.put("name", itemManager.getItemComposition(canonicalId).getName());
-			serialized.put("quantity", item.getQuantity());
-			serialized.put("unitPrice", unitPrice);
-			serialized.put("totalValue", value);
-			result.add(serialized);
+			long guidePrice = itemManager.getItemPriceWithSource(canonicalId, false);
+			total += guidePrice * item.getQuantity();
 		}
-		return new SetupPart(result, total);
+		return total;
 	}
 
-	private void captureAndSend(Map<String, Object> payload)
+	private void captureAndSend(Map<String, Object> payload, Long guideValue, String title)
+	{
+		captureScreenshot(guideValue, title,
+			screenshot -> serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload,
+				screenshot),
+			error -> {
+				log.warn("{}; sending the event without its screenshot", error);
+				serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+			});
+	}
+
+	private void captureScreenshot(Long guideValue, String title, Consumer<byte[]> success,
+		Consumer<String> failure)
 	{
 		boolean chatHidden = hideWidget(config.hideChatInScreenshots(), InterfaceID.Chatbox.CHATAREA);
 		boolean pmsHidden = hideWidget(config.hideChatInScreenshots(), InterfaceID.PmChat.CONTAINER);
@@ -353,17 +430,18 @@ public class ImajEventsPlugin extends Plugin
 		{
 			// Queue a second frame so widgets hidden for privacy are absent from the captured image.
 			drawManager.requestNextFrameListener(ignored ->
-				clientThread.invokeLater(() -> requestCompletionFrame(payload, restore)));
+				clientThread.invokeLater(() -> requestScreenshotFrame(guideValue, title, restore, success, failure)));
 		}
 		catch (RuntimeException ex)
 		{
 			restore.run();
-			log.warn("Unable to schedule completion screenshot", ex);
-			serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+			log.warn("Unable to schedule screenshot", ex);
+			failure.accept("Unable to schedule screenshot");
 		}
 	}
 
-	private void requestCompletionFrame(Map<String, Object> payload, Runnable restore)
+	private void requestScreenshotFrame(Long guideValue, String title, Runnable restore,
+		Consumer<byte[]> success, Consumer<String> failure)
 	{
 		try
 		{
@@ -374,17 +452,16 @@ public class ImajEventsPlugin extends Plugin
 				Graphics2D graphics = copy.createGraphics();
 				graphics.drawImage(frame, 0, 0, null);
 				graphics.dispose();
-				BufferedImage reportImage = appendSetupPanel(copy, payload);
+				BufferedImage reportImage = guideValue == null ? copy : appendGuideValuePanel(copy, title, guideValue);
 				executor.execute(() -> {
 					try
 					{
-						serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload,
-							jpeg(reportImage));
+						success.accept(jpeg(reportImage));
 					}
 					catch (IOException ex)
 					{
-						log.warn("Unable to encode completion screenshot; sending the event without it", ex);
-						serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+						log.warn("Unable to encode screenshot", ex);
+						failure.accept("Unable to encode screenshot");
 					}
 				});
 			});
@@ -392,29 +469,15 @@ public class ImajEventsPlugin extends Plugin
 		catch (RuntimeException ex)
 		{
 			restore.run();
-			log.warn("Unable to capture completion screenshot; sending the event without it", ex);
-			serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+			log.warn("Unable to capture screenshot", ex);
+			failure.accept("Unable to capture screenshot");
 		}
 	}
 
-	private BufferedImage appendSetupPanel(BufferedImage screenshot, Map<String, Object> payload)
+	private BufferedImage appendGuideValuePanel(BufferedImage screenshot, String title, long guideValue)
 	{
-		if (!payload.containsKey("setupTotalValue"))
-		{
-			return screenshot;
-		}
-		List<String> lines = new ArrayList<>();
-		lines.add("EQUIPMENT");
-		appendItemLines(lines, payload.get("equipment"));
-		lines.add("");
-		lines.add("INVENTORY");
-		appendItemLines(lines, payload.get("inventory"));
-		lines.add("");
-		lines.add("TOTAL: " + formatGp(payload.get("setupTotalValue")) + " gp");
-
-		int panelWidth = 390;
-		int lineHeight = 17;
-		int outputHeight = Math.max(screenshot.getHeight(), 28 + lines.size() * lineHeight);
+		int panelWidth = 330;
+		int outputHeight = screenshot.getHeight();
 		BufferedImage combined = new BufferedImage(screenshot.getWidth() + panelWidth,
 			outputHeight, BufferedImage.TYPE_INT_RGB);
 		Graphics2D graphics = combined.createGraphics();
@@ -425,39 +488,18 @@ public class ImajEventsPlugin extends Plugin
 			java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 		graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 15));
 		graphics.setColor(new Color(190, 160, 255));
-		graphics.drawString("Imaj's Events — completion setup", screenshot.getWidth() + 14, 22);
-		graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
-		int y = 42;
-		for (String line : lines)
-		{
-			boolean heading = "EQUIPMENT".equals(line) || "INVENTORY".equals(line) || line.startsWith("TOTAL:");
-			graphics.setColor(heading ? new Color(235, 225, 255) : Color.WHITE);
-			graphics.drawString(line, screenshot.getWidth() + 14, y);
-			y += lineHeight;
-		}
+		graphics.drawString("Imaj's Events — " + title, screenshot.getWidth() + 14, 24);
+		graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
+		graphics.setColor(new Color(235, 225, 255));
+		graphics.drawString("TOTAL GUIDE VALUE", screenshot.getWidth() + 14, 54);
+		graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 16));
+		graphics.setColor(Color.WHITE);
+		graphics.drawString(formatGp(guideValue) + " gp", screenshot.getWidth() + 14, 79);
+		graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+		graphics.setColor(Color.LIGHT_GRAY);
+		graphics.drawString("Equipment + inventory", screenshot.getWidth() + 14, 101);
 		graphics.dispose();
 		return combined;
-	}
-
-	private void appendItemLines(List<String> lines, Object value)
-	{
-		if (!(value instanceof List))
-		{
-			lines.add("None recorded");
-			return;
-		}
-		for (Object item : (List<?>) value)
-		{
-			if (!(item instanceof Map))
-			{
-				continue;
-			}
-			Map<?, ?> fields = (Map<?, ?>) item;
-			String name = String.valueOf(fields.get("name"));
-			String quantity = String.valueOf(fields.get("quantity"));
-			String line = name + " x" + quantity + " — " + formatGp(fields.get("totalValue")) + " gp";
-			lines.add(line.length() > 48 ? line.substring(0, 47) + "…" : line);
-		}
 	}
 
 	private String formatGp(Object value)
@@ -563,6 +605,112 @@ public class ImajEventsPlugin extends Plugin
 		return expected.endsWith("*") || actual.endsWith(last);
 	}
 
+	private boolean finishSpecialKillIfMatched(String detectedBoss, int killCount)
+	{
+		SpecialKillAttempt attempt = specialKillAttempt;
+		if (attempt == null || !bossNamesMatch(attempt.boss, detectedBoss))
+		{
+			return false;
+		}
+
+		if (attempt.bossCompleted)
+		{
+			return true;
+		}
+		attempt.bossCompleted = true;
+		attempt.detectedBoss = detectedBoss;
+		attempt.killCount = killCount;
+		long endingGuideValue = currentSetupGuideValue();
+		attempt.endingGuideValue = endingGuideValue;
+
+		if (panel != null)
+		{
+			panel.showSpecialKillStatus("Finishing " + detectedBoss + "...");
+		}
+		captureScreenshot(endingGuideValue, "Special Kill — ending setup", endingScreenshot -> {
+			attempt.endingScreenshot = endingScreenshot;
+			trySendSpecialKill(attempt);
+			if (panel != null)
+			{
+				panel.showSpecialKillStatus(attempt.gameTime == null
+					? "Boss complete — waiting for the game's time message"
+					: "Special Kill sent — game time " + attempt.gameTime);
+			}
+		}, error -> {
+			log.warn("{}; sending a normal completion instead", error);
+			if (specialKillAttempt == attempt)
+			{
+				specialKillAttempt = null;
+			}
+			sendKillCount(detectedBoss, killCount);
+			if (panel != null)
+			{
+				panel.showSpecialKillStatus("Screenshot failed; normal completion sent");
+			}
+		});
+		return true;
+	}
+
+	private boolean recordSpecialKillGameTime(String gameTime, String message)
+	{
+		SpecialKillAttempt attempt = specialKillAttempt;
+		if (attempt == null)
+		{
+			return false;
+		}
+		attempt.gameTime = gameTime;
+		attempt.gameTimeMessage = message;
+		trySendSpecialKill(attempt);
+		if (panel != null)
+		{
+			panel.showSpecialKillStatus(attempt.sent
+				? "Special Kill sent — game time " + attempt.gameTime
+				: attempt.bossCompleted
+					? "Game time received — finishing Special Kill"
+					: "Game time received — waiting for " + attempt.boss + " KC");
+		}
+		return true;
+	}
+
+	private void trySendSpecialKill(SpecialKillAttempt attempt)
+	{
+		synchronized (attempt)
+		{
+			if (attempt.sent || !attempt.bossCompleted || attempt.gameTime == null
+				|| attempt.endingScreenshot == null)
+			{
+				return;
+			}
+			attempt.sent = true;
+		}
+
+		Map<String, Object> payload = baseEvent("SPECIAL_KILL");
+		payload.put("source", attempt.detectedBoss);
+		payload.put("killCount", attempt.killCount);
+		payload.put("gameTime", attempt.gameTime);
+		payload.put("gameTimeMessage", attempt.gameTimeMessage);
+		payload.put("startingGuideValue", attempt.startingGuideValue);
+		payload.put("endingGuideValue", attempt.endingGuideValue);
+		payload.put("guideValueUsed", Math.max(0L, attempt.startingGuideValue - attempt.endingGuideValue));
+		payload.put("priceBasis", "Jagex guide price");
+		serviceClient.sendSpecialKillEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload,
+			attempt.startingScreenshot, attempt.endingScreenshot);
+		if (specialKillAttempt == attempt)
+		{
+			specialKillAttempt = null;
+		}
+	}
+
+	static boolean bossNamesMatch(String selectedBoss, String detectedBoss)
+	{
+		return normalizeBossName(selectedBoss).equals(normalizeBossName(detectedBoss));
+	}
+
+	private static String normalizeBossName(String value)
+	{
+		return value == null ? "" : value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+	}
+
 	private void sendLoot(String source, java.util.Collection<ItemStack> items)
 	{
 		if (!isConnected() || items.isEmpty())
@@ -577,6 +725,7 @@ public class ImajEventsPlugin extends Plugin
 			quantities.merge(canonicalId, (long) item.getQuantity(), Long::sum);
 		}
 
+		List<Map<String, Object>> payloads = new ArrayList<>();
 		for (Map.Entry<Integer, Long> entry : quantities.entrySet())
 		{
 			int itemId = entry.getKey();
@@ -599,7 +748,34 @@ public class ImajEventsPlugin extends Plugin
 			payload.put("quantity", quantity);
 			payload.put("unitPrice", unitPrice);
 			payload.put("totalValue", totalValue);
-			serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+			payloads.add(payload);
+		}
+
+		if (payloads.isEmpty())
+		{
+			return;
+		}
+		if (profile.isLootScreenshotsEnabled() && config.lootScreenshots())
+		{
+			captureScreenshot(null, "", screenshot -> {
+				for (Map<String, Object> payload : payloads)
+				{
+					serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload, screenshot);
+				}
+			}, error -> {
+				log.warn("{}; sending loot without a screenshot", error);
+				for (Map<String, Object> payload : payloads)
+				{
+					serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+				}
+			});
+		}
+		else
+		{
+			for (Map<String, Object> payload : payloads)
+			{
+				serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+			}
 		}
 	}
 
@@ -718,15 +894,25 @@ public class ImajEventsPlugin extends Plugin
 		return manager.getConfig(ImajEventsConfig.class);
 	}
 
-	private static final class SetupPart
+	private static final class SpecialKillAttempt
 	{
-		private final List<Map<String, Object>> items;
-		private final long value;
+		private final String boss;
+		private final long startingGuideValue;
+		private final byte[] startingScreenshot;
+		private volatile boolean bossCompleted;
+		private volatile String detectedBoss;
+		private volatile int killCount;
+		private volatile long endingGuideValue;
+		private volatile byte[] endingScreenshot;
+		private volatile String gameTime;
+		private volatile String gameTimeMessage;
+		private boolean sent;
 
-		private SetupPart(List<Map<String, Object>> items, long value)
+		private SpecialKillAttempt(String boss, long startingGuideValue, byte[] startingScreenshot)
 		{
-			this.items = items;
-			this.value = value;
+			this.boss = boss;
+			this.startingGuideValue = startingGuideValue;
+			this.startingScreenshot = startingScreenshot;
 		}
 	}
 }

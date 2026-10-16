@@ -25,7 +25,11 @@ class ImajEventsPanel extends PluginPanel
 	private final JPasswordField changeCodeField = new JPasswordField();
 	private final JButton enrollButton = new JButton("Enroll");
 	private final JButton changeRsnButton = new JButton("Change RSN");
+	private final JTextField specialKillBossField = new JTextField();
+	private final JButton startSpecialKillButton = new JButton("Start Special Kill");
+	private final JButton cancelSpecialKillButton = new JButton("Cancel Special Kill");
 	private final JLabel statusLabel = new JLabel("Not enrolled");
+	private final JLabel specialKillStatusLabel = new JLabel("No Special Kill active");
 
 	ImajEventsPanel(ImajEventsPlugin plugin)
 	{
@@ -58,13 +62,49 @@ class ImajEventsPanel extends PluginPanel
 		form.add(changeRsnButton, gbc);
 		gbc.gridy++;
 
+		JLabel specialKillTitle = new JLabel("Special Kill (optional)");
+		specialKillTitle.setBorder(BorderFactory.createEmptyBorder(14, 0, 2, 0));
+		form.add(specialKillTitle, gbc);
+		gbc.gridy++;
+		addLabelAndField(form, gbc, "Boss name from the KC message", specialKillBossField);
+		form.add(startSpecialKillButton, gbc);
+		gbc.gridy++;
+		form.add(cancelSpecialKillButton, gbc);
+		gbc.gridy++;
+		specialKillStatusLabel.setForeground(Color.LIGHT_GRAY);
+		specialKillStatusLabel.setBorder(BorderFactory.createEmptyBorder(4, 0, 0, 0));
+		form.add(specialKillStatusLabel, gbc);
+		gbc.gridy++;
+
 		statusLabel.setForeground(Color.LIGHT_GRAY);
 		statusLabel.setBorder(BorderFactory.createEmptyBorder(12, 0, 0, 0));
 		form.add(statusLabel, gbc);
 
 		enrollButton.addActionListener(event -> enroll());
 		changeRsnButton.addActionListener(event -> changeRsn());
+		startSpecialKillButton.addActionListener(event -> startSpecialKill());
+		cancelSpecialKillButton.addActionListener(event -> cancelSpecialKill());
 		add(form, BorderLayout.NORTH);
+	}
+
+	private void startSpecialKill()
+	{
+		startSpecialKillButton.setEnabled(false);
+		specialKillStatusLabel.setText("Capturing starting setup...");
+		plugin.startSpecialKill(specialKillBossField.getText(), message -> {
+			startSpecialKillButton.setEnabled(true);
+			specialKillStatusLabel.setText(message);
+		}, error -> {
+			startSpecialKillButton.setEnabled(true);
+			specialKillStatusLabel.setText(error);
+		});
+	}
+
+	private void cancelSpecialKill()
+	{
+		plugin.cancelSpecialKill();
+		startSpecialKillButton.setEnabled(true);
+		specialKillStatusLabel.setText("No Special Kill active");
 	}
 
 	private void addLabelAndField(JPanel form, GridBagConstraints gbc, String label, JTextField field)
@@ -116,6 +156,11 @@ class ImajEventsPanel extends PluginPanel
 	void showStatus(String message)
 	{
 		SwingUtilities.invokeLater(() -> statusLabel.setText(message));
+	}
+
+	void showSpecialKillStatus(String message)
+	{
+		SwingUtilities.invokeLater(() -> specialKillStatusLabel.setText(message));
 	}
 
 	private void setBusy(boolean busy, String status)

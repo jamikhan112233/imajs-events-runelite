@@ -75,6 +75,19 @@ public interface ImajEventsConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "lootScreenshots",
+		name = "Upload loot screenshots",
+		description = "When the competition profile permits it, attach a screenshot to each qualifying Loot Tracker item",
+		position = 2,
+		section = screenshotSection,
+		warning = "Screenshots may contain visible game information and are sent to the configured 3rd-party service"
+	)
+	default boolean lootScreenshots()
+	{
+		return false;
+	}
+
+	@ConfigItem(
 		keyName = "enrollmentToken",
 		name = "Enrollment token",
 		description = "Opaque token issued by the service after enrollment",

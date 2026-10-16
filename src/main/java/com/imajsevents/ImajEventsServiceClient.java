@@ -73,6 +73,29 @@ class ImajEventsServiceClient
 			sendEvent(baseUrl, token, payload);
 			return;
 		}
+		Map<String, Upload> uploads = new LinkedHashMap<>();
+		uploads.put("file", new Upload("completion.jpg", screenshot));
+		sendMultipartEvent(baseUrl, token, payload, uploads);
+	}
+
+	void sendSpecialKillEvent(String baseUrl, String token, Map<String, Object> payload,
+		byte[] startingScreenshot, byte[] endingScreenshot)
+	{
+		if (startingScreenshot == null || startingScreenshot.length == 0
+			|| endingScreenshot == null || endingScreenshot.length == 0)
+		{
+			log.warn("Imaj's Events Special Kill requires both screenshots");
+			return;
+		}
+		Map<String, Upload> uploads = new LinkedHashMap<>();
+		uploads.put("start_file", new Upload("special-kill-start.jpg", startingScreenshot));
+		uploads.put("end_file", new Upload("special-kill-end.jpg", endingScreenshot));
+		sendMultipartEvent(baseUrl, token, payload, uploads);
+	}
+
+	private void sendMultipartEvent(String baseUrl, String token, Map<String, Object> payload,
+		Map<String, Upload> uploads)
+	{
 		final String url;
 		try
 		{
@@ -84,12 +107,15 @@ class ImajEventsServiceClient
 			return;
 		}
 
-		RequestBody body = new MultipartBody.Builder()
+		MultipartBody.Builder multipart = new MultipartBody.Builder()
 			.setType(MultipartBody.FORM)
-			.addFormDataPart("payload_json", gson.toJson(payload))
-			.addFormDataPart("file", "completion.jpg",
-				RequestBody.create(MediaType.parse("image/jpeg"), screenshot))
-			.build();
+			.addFormDataPart("payload_json", gson.toJson(payload));
+		for (Map.Entry<String, Upload> entry : uploads.entrySet())
+		{
+			multipart.addFormDataPart(entry.getKey(), entry.getValue().filename,
+				RequestBody.create(MediaType.parse("image/jpeg"), entry.getValue().bytes));
+		}
+		RequestBody body = multipart.build();
 		Request request = new Request.Builder()
 			.url(url)
 			.header("Accept", "application/json")
@@ -211,5 +237,17 @@ class ImajEventsServiceClient
 
 	private static class EmptyResponse
 	{
+	}
+
+	private static final class Upload
+	{
+		private final String filename;
+		private final byte[] bytes;
+
+		private Upload(String filename, byte[] bytes)
+		{
+			this.filename = filename;
+			this.bytes = bytes;
+		}
 	}
 }

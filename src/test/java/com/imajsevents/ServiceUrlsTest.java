@@ -54,4 +54,12 @@ public class ServiceUrlsTest
 		assertFalse(ImajEventsPlugin.lootItemAllowed(
 			Collections.emptyList(), Arrays.asList("Coins"), "Coins", 995));
 	}
+
+	@Test
+	public void specialKillBossMatchingIgnoresCaseSpacesAndPunctuation()
+	{
+		assertTrue(ImajEventsPlugin.bossNamesMatch("Theatre of Blood", "THEATRE-OF-BLOOD"));
+		assertTrue(ImajEventsPlugin.bossNamesMatch("Phantom Muspah", "Phantom Muspah"));
+		assertFalse(ImajEventsPlugin.bossNamesMatch("Vorkath", "Zulrah"));
+	}
 }

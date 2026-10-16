@@ -13,11 +13,13 @@ public class CompetitionProfile
 	private int minimumLootValue;
 	private List<String> allowedLootItems = new ArrayList<>();
 	private List<String> ignoredLootItems = new ArrayList<>();
+	private boolean lootScreenshotsEnabled;
 	private boolean levelEnabled;
 	private boolean deathEnabled;
 	private boolean killCountEnabled;
 	private boolean setupCaptureEnabled;
 	private boolean killCountScreenshotsEnabled;
+	private boolean specialKillEnabled;
 	private boolean speedrunEnabled;
 	private boolean customChatEnabled;
 	private List<String> customChatMessages = new ArrayList<>();

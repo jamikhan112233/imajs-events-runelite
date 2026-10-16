@@ -8,12 +8,13 @@ A participant enrolls with a competition name, competition password, and the Run
 
 The competition service can independently enable:
 
-- Per-item Loot Tracker notifications, a minimum per-item stack value, and organizer-owned allow/ignore item rules
+- Per-item Loot Tracker notifications, a minimum per-item stack value, organizer-owned allow/ignore item rules, and separately opt-in screenshots
 - Level-up notifications
 - Player-death notifications
 - Kill-count and completion notifications
-- Equipment and inventory snapshots when a kill count/completion is detected
+- A combined equipment-plus-inventory Jagex guide-value total when a kill count/completion is detected
 - Opt-in completion screenshots
+- Opt-in Special Kills with starting/ending screenshots, guide values, and the game's official completion time
 - Speedrun time notifications from game-generated completion messages
 - Custom system/game-message rules using case-insensitive `*` wildcards
 
@@ -30,19 +31,22 @@ The competition profile controls two server-owned lists:
 
 Rules accept exact item names, numeric item IDs, or case-insensitive `*` wildcards such as `Godsword shard *`. The minimum loot value is applied to each individual item stack, not the combined drop.
 
-## Completion setup values and screenshots
+## Setup guide values and screenshots
 
-When setup capture is enabled, every detected kill-count/completion report includes:
+When setup capture is enabled, a detected kill-count/completion report includes one combined equipment-plus-inventory value. The plugin forces RuneLite's Jagex guide-price source rather than the optional Wiki/actively-traded price source. Individual setup item values are not submitted or listed.
 
-- Equipped items
-- Inventory items
-- Quantity, current RuneLite Grand Exchange unit price, and total value for each item
-- Separate equipment and inventory totals
-- Combined setup value
+Screenshots require both sides to opt in. Completion screenshots require organizer permission plus the player's **Upload completion screenshots** switch. Loot screenshots use a separate organizer permission and local **Upload loot screenshots** switch; one captured frame is reused across the separate item-stack messages from the same Loot Tracker event. When a guide value is included, the image side panel shows only the combined total. Chat and private-message widgets are hidden during capture by default.
 
-Untradeable items can show a value of zero when RuneLite has no Grand Exchange mapping. Coins and platinum tokens use their face values.
+## Special Kill
 
-Screenshots require both sides to opt in: the organizer must permit them in the competition profile and the player must enable **Upload completion screenshots** in RuneLite. Screenshots are JPEG files attached only to kill-count/completion events, not ordinary loot messages. When setup capture is enabled, the image receives a side panel listing the equipment, inventory, and total setup value. Chat and private-message widgets are hidden during capture by default.
+Special Kill is inactive unless the player explicitly uses the side panel:
+
+1. Enter the boss name as it appears in the boss's game-generated KC message.
+2. Press **Start Special Kill** to capture the starting frame and combined guide value.
+3. Complete that selected boss. Other boss completions do not end the attempt.
+4. The matching KC message captures the ending frame and value. The report waits for the game's `Duration`, `Challenge time`, `Completion time`, `Speedrun duration`, or `Subdued in` chat line, then sends that official time with both screenshots and guide totals.
+
+The Special Kill report replaces the ordinary KC report so Discord does not receive a duplicate. The player can cancel an active attempt at any time, and restarting RuneLite clears it.
 
 ## Kill counts, speedruns, and custom messages
 
@@ -73,7 +77,7 @@ The plugin evaluates only RuneLite `GAMEMESSAGE` and `SPAM` system-message types
 
 ## Privacy
 
-The network connection is opt-in and disabled by default. When enabled, requests necessarily disclose the user's IP address to the configured Imaj's Events service. Enrollment sends the participant-entered competition name, password, and RSN. Event requests send the enabled event details and can include the current equipment/inventory names, quantities, values, and an optional game screenshot.
+The network connection is opt-in and disabled by default. When enabled, requests necessarily disclose the user's IP address to the configured Imaj's Events service. Enrollment sends the participant-entered competition name, password, and RSN. Event requests send the enabled event details and can include combined setup guide-value totals and optional game screenshots. Special Kill sends its selected boss, the official game-generated completion time, starting/ending guide totals, and two screenshots.
 
 The plugin does not read the currently logged-in RuneScape name and does not inspect or modify another plugin's configuration.
 
@@ -104,10 +108,11 @@ Test the following manually in game:
 2. Enable it, enter the Worker HTTPS URL, and enroll with a valid competition, password, and RSN.
 3. Confirm qualifying loot, enabled kill counts, times, and custom system messages reach only the competition webhook.
 4. Confirm disabled event types, nonmatching messages, and loot below the configured minimum are not posted.
-5. Complete an activity and verify the equipment/inventory lines and totals match the current setup.
-6. Verify no screenshot is sent until both the server profile and local setting permit it; confirm chat is hidden in an allowed screenshot.
-7. Generate an RSN code for the participant, use it once, and confirm reuse and expired codes fail.
-8. Restart RuneLite and confirm the opaque enrollment is restored without re-entering the competition password.
+5. Complete an activity and verify the single combined Jagex guide-value total matches the setup.
+6. Verify loot and completion screenshots each require their corresponding organizer and local permissions.
+7. Start a Special Kill, confirm another boss does not finish it, then complete the selected boss and verify two screenshots and the game's official time.
+8. Generate an RSN code for the participant, use it once, and confirm reuse and expired codes fail.
+9. Restart RuneLite and confirm the opaque enrollment is restored without re-entering the competition password.
 
 ## Plugin Hub submission
 
