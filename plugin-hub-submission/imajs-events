@@ -1,3 +1,3 @@
 repository=https://github.com/jamikhan112233/imajs-events-runelite.git
-commit=18082a08887dc5d52443ce07f766445de9aa1b22
+commit=d6430ad55b683c282e14e7aa05ccd41e524e0053
 warning=This plugin sends opted-in competition event data and the user's IP address to a third-party Imaj's Events service. Enabled completion reports may include equipment, inventory, Grand Exchange values, and an optional screenshot. The service is not controlled or verified by RuneLite developers.
