@@ -1,7 +1,9 @@
 package com.imajsevents;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.Data;
 
 @Data
@@ -13,6 +15,7 @@ public class CompetitionProfile
 	private int minimumLootValue;
 	private List<String> allowedLootItems = new ArrayList<>();
 	private List<String> ignoredLootItems = new ArrayList<>();
+	private Map<String, Long> itemValueOverrides = new LinkedHashMap<>();
 	private boolean lootScreenshotsEnabled;
 	private boolean levelEnabled;
 	private boolean deathEnabled;
