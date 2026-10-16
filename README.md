@@ -31,7 +31,7 @@ When setup capture is enabled, every detected kill-count/completion report inclu
 
 Untradeable items can show a value of zero when RuneLite has no Grand Exchange mapping. Coins and platinum tokens use their face values.
 
-Screenshots require both sides to opt in: the organizer must permit them in the competition profile and the player must enable **Upload completion screenshots** in RuneLite. Screenshots are JPEG files attached to the same completion event. Chat and private-message widgets are hidden during capture by default.
+Screenshots require both sides to opt in: the organizer must permit them in the competition profile and the player must enable **Upload completion screenshots** in RuneLite. Screenshots are JPEG files attached to the same completion event. When setup capture is enabled, the image receives a side panel listing the equipment, inventory, and total setup value. Chat and private-message widgets are hidden during capture by default.
 
 ## Kill counts, speedruns, and custom messages
 
