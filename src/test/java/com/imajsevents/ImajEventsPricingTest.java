@@ -9,27 +9,27 @@ import static org.junit.Assert.assertEquals;
 public class ImajEventsPricingTest
 {
 	@Test
-	public void currentGeValueIsUsedForTradeableItems()
+	public void currentRuneLiteValueIsUsedForTradeableItems()
 	{
-		assertEquals(1_250_000L, ImajEventsPlugin.chooseItemUnitValue(true, 1_250_000L, 65_000L, null));
+		assertEquals(1_250_000L, ImajEventsPlugin.chooseItemUnitValue(1_250_000L, 65_000L, null));
 	}
 
 	@Test
-	public void guideValueIsUsedForUntradeableItems()
+	public void mappedRuneLiteValueIsUsedForUntradeableItems()
 	{
-		assertEquals(99_000L, ImajEventsPlugin.chooseItemUnitValue(false, 0L, 99_000L, null));
+		assertEquals(10_427_384L, ImajEventsPlugin.chooseItemUnitValue(10_427_384L, 130_000L, null));
 	}
 
 	@Test
-	public void guideValueIsUsedWhenTradeablePriceIsMissing()
+	public void guideValueIsUsedWhenRuneLitePriceIsMissing()
 	{
-		assertEquals(65_000L, ImajEventsPlugin.chooseItemUnitValue(true, 0L, 65_000L, null));
+		assertEquals(65_000L, ImajEventsPlugin.chooseItemUnitValue(0L, 65_000L, null));
 	}
 
 	@Test
 	public void organizerOverrideAlwaysWins()
 	{
-		assertEquals(225_000L, ImajEventsPlugin.chooseItemUnitValue(false, 0L, 99_000L, 225_000L));
+		assertEquals(225_000L, ImajEventsPlugin.chooseItemUnitValue(68_902_986L, 99_000L, 225_000L));
 	}
 
 	@Test
