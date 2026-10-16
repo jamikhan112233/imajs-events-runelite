@@ -31,6 +31,7 @@ import net.runelite.api.Actor;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.Item;
+import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
 import net.runelite.client.game.ItemStack;
 import net.runelite.api.Skill;
@@ -417,9 +418,9 @@ public class ImajEventsPlugin extends Plugin
 		for (Map.Entry<Integer, Long> entry : quantities.entrySet())
 		{
 			int canonicalId = entry.getKey();
-			long guidePrice = builtInGuideValue(itemManager.getItemComposition(canonicalId).getPrice());
 			String name = itemManager.getItemComposition(canonicalId).getName();
-			values.add(new SetupItem(name, entry.getValue(), guidePrice));
+			ResolvedItemValue unitValue = resolveItemValue(canonicalId, name);
+			values.add(new SetupItem(name, entry.getValue(), unitValue.value, unitValue.source));
 		}
 		return values;
 	}
@@ -542,7 +543,7 @@ public class ImajEventsPlugin extends Plugin
 			graphics.drawString(shorten(item.name, 24), x, lineY);
 			graphics.setColor(Color.LIGHT_GRAY);
 			graphics.drawString(formatGp(item.quantity) + " × " + formatGp(item.unitPrice)
-				+ " = " + formatGp(item.totalValue) + " gp", x + 145, lineY);
+				+ " = " + formatGp(item.totalValue) + " gp [" + item.priceSource + "]", x + 145, lineY);
 			lineY += 15;
 		}
 	}
@@ -552,9 +553,49 @@ public class ImajEventsPlugin extends Plugin
 		return value.length() <= maximum ? value : value.substring(0, maximum - 1) + "…";
 	}
 
-	static long builtInGuideValue(long inGameValue)
+	private ResolvedItemValue resolveItemValue(int itemId, String itemName)
 	{
-		return Math.max(0L, inGameValue);
+		ItemComposition composition = itemManager.getItemComposition(itemId);
+		Long override = findItemValueOverride(profile.getItemValueOverrides(), itemId, itemName);
+		long currentGeValue = composition.isTradeable()
+			? itemManager.getItemPriceWithSource(itemId, true)
+			: 0L;
+		long guideValue = composition.getPrice();
+		long value = chooseItemUnitValue(composition.isTradeable(), currentGeValue, guideValue, override);
+		String source = override != null ? "override"
+			: composition.isTradeable() && currentGeValue > 0L ? "GE" : "guide";
+		return new ResolvedItemValue(value, source);
+	}
+
+	static long chooseItemUnitValue(boolean tradeable, long currentGeValue, long guideValue, Long override)
+	{
+		if (override != null)
+		{
+			return Math.max(0L, override);
+		}
+		return Math.max(0L, tradeable && currentGeValue > 0L ? currentGeValue : guideValue);
+	}
+
+	static Long findItemValueOverride(Map<String, Long> overrides, int itemId, String itemName)
+	{
+		if (overrides == null || overrides.isEmpty())
+		{
+			return null;
+		}
+		Long byId = overrides.get(String.valueOf(itemId));
+		if (byId != null)
+		{
+			return byId;
+		}
+		for (Map.Entry<String, Long> entry : overrides.entrySet())
+		{
+			if (entry.getKey() != null && entry.getValue() != null
+				&& entry.getKey().trim().equalsIgnoreCase(itemName))
+			{
+				return entry.getValue();
+			}
+		}
+		return null;
 	}
 
 	private String formatGp(Object value)
@@ -786,7 +827,7 @@ public class ImajEventsPlugin extends Plugin
 			int itemId = entry.getKey();
 			long quantity = entry.getValue();
 			String itemName = itemManager.getItemComposition(itemId).getName();
-			long unitPrice = builtInGuideValue(itemManager.getItemComposition(itemId).getPrice());
+			long unitPrice = resolveItemValue(itemId, itemName).value;
 			long totalValue = unitPrice * quantity;
 			if (totalValue < profile.getMinimumLootValue()
 				|| !lootItemAllowed(profile.getAllowedLootItems(), profile.getIgnoredLootItems(),
@@ -982,13 +1023,27 @@ public class ImajEventsPlugin extends Plugin
 		private final long quantity;
 		private final long unitPrice;
 		private final long totalValue;
+		private final String priceSource;
 
-		private SetupItem(String name, long quantity, long unitPrice)
+		private SetupItem(String name, long quantity, long unitPrice, String priceSource)
 		{
 			this.name = name;
 			this.quantity = quantity;
 			this.unitPrice = unitPrice;
 			this.totalValue = quantity * unitPrice;
+			this.priceSource = priceSource;
+		}
+	}
+
+	private static final class ResolvedItemValue
+	{
+		private final long value;
+		private final String source;
+
+		private ResolvedItemValue(long value, String source)
+		{
+			this.value = value;
+			this.source = source;
 		}
 	}
 }
