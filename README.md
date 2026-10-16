@@ -1,6 +1,6 @@
 # Imaj's Events
 
-Imaj's Events is an opt-in RuneLite competition client. It runs similarly to [oCage](https://runelite.net/plugin-hub/show/ocage): RuneLite detects enabled in-game event signals and reports them to an event service, which records and forwards them for competition use.
+Imaj's Events is an opt-in RuneLite competition client. RuneLite detects enabled in-game event signals and reports them to an event service, which records and forwards them for competition use.
 
 A participant enrolls with a competition name, competition password, and the RuneScape name registered for that event. The service returns a server-owned profile that controls exactly which supported notifications may be sent.
 
