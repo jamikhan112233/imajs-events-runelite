@@ -208,14 +208,14 @@ public class ImajEventsPlugin extends Plugin
 		specialKillPreparing = true;
 		long generation = ++specialKillGeneration;
 		clientThread.invokeLater(() -> {
-			long startingGuideValue = currentSetupGuideValue();
-			captureScreenshot(startingGuideValue, "Special Kill — starting setup", screenshot -> {
+			SetupSnapshot startingSetup = currentSetupSnapshot();
+			captureScreenshot(startingSetup, "Special Kill — starting setup", screenshot -> {
 				if (generation != specialKillGeneration)
 				{
 					return;
 				}
 				specialKillPreparing = false;
-				specialKillAttempt = new SpecialKillAttempt(selectedBoss, startingGuideValue, screenshot);
+				specialKillAttempt = new SpecialKillAttempt(selectedBoss, startingSetup.totalValue, screenshot);
 				onUi(() -> success.accept("Recording " + selectedBoss + " — waiting for its KC message"));
 			}, error -> {
 				if (generation != specialKillGeneration)
@@ -362,17 +362,17 @@ public class ImajEventsPlugin extends Plugin
 		Map<String, Object> payload = baseEvent("KILL_COUNT");
 		payload.put("source", source);
 		payload.put("killCount", killCount);
-		Long setupGuideValue = null;
+		SetupSnapshot setup = null;
 		if (profile.isSetupCaptureEnabled())
 		{
-			setupGuideValue = currentSetupGuideValue();
-			payload.put("setupTotalValue", setupGuideValue);
+			setup = currentSetupSnapshot();
+			payload.put("setupTotalValue", setup.totalValue);
 			payload.put("priceBasis", "Jagex guide price");
 		}
 
 		if (profile.isKillCountScreenshotsEnabled() && config.completionScreenshots())
 		{
-			captureAndSend(payload, setupGuideValue, "Completion setup");
+			captureAndSend(payload, setup, "Completion setup");
 		}
 		else
 		{
@@ -380,19 +380,31 @@ public class ImajEventsPlugin extends Plugin
 		}
 	}
 
-	private long currentSetupGuideValue()
+	private SetupSnapshot currentSetupSnapshot()
 	{
-		return containerGuideValue(InventoryID.WORN) + containerGuideValue(InventoryID.INV);
+		List<SetupItem> equipment = containerSetupItems(InventoryID.WORN);
+		List<SetupItem> inventory = containerSetupItems(InventoryID.INV);
+		long total = 0;
+		for (SetupItem item : equipment)
+		{
+			total += item.totalValue;
+		}
+		for (SetupItem item : inventory)
+		{
+			total += item.totalValue;
+		}
+		return new SetupSnapshot(equipment, inventory, total);
 	}
 
-	private long containerGuideValue(int inventoryId)
+	private List<SetupItem> containerSetupItems(int inventoryId)
 	{
 		ItemContainer container = client.getItemContainer(inventoryId);
-		long total = 0;
+		List<SetupItem> values = new ArrayList<>();
 		if (container == null)
 		{
-			return total;
+			return values;
 		}
+		Map<Integer, Long> quantities = new LinkedHashMap<>();
 		for (Item item : container.getItems())
 		{
 			if (item.getId() <= 0 || item.getQuantity() <= 0)
@@ -400,15 +412,22 @@ public class ImajEventsPlugin extends Plugin
 				continue;
 			}
 			int canonicalId = itemManager.canonicalize(item.getId());
-			long guidePrice = itemManager.getItemPriceWithSource(canonicalId, false);
-			total += guidePrice * item.getQuantity();
+			quantities.merge(canonicalId, (long) item.getQuantity(), Long::sum);
 		}
-		return total;
+		for (Map.Entry<Integer, Long> entry : quantities.entrySet())
+		{
+			int canonicalId = entry.getKey();
+			long guidePrice = canonicalId == 995 ? 1L : canonicalId == 13204 ? 1000L
+				: Math.max(0L, itemManager.getItemPriceWithSource(canonicalId, false));
+			String name = itemManager.getItemComposition(canonicalId).getName();
+			values.add(new SetupItem(name, entry.getValue(), guidePrice));
+		}
+		return values;
 	}
 
-	private void captureAndSend(Map<String, Object> payload, Long guideValue, String title)
+	private void captureAndSend(Map<String, Object> payload, SetupSnapshot setup, String title)
 	{
-		captureScreenshot(guideValue, title,
+		captureScreenshot(setup, title,
 			screenshot -> serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload,
 				screenshot),
 			error -> {
@@ -417,7 +436,7 @@ public class ImajEventsPlugin extends Plugin
 			});
 	}
 
-	private void captureScreenshot(Long guideValue, String title, Consumer<byte[]> success,
+	private void captureScreenshot(SetupSnapshot setup, String title, Consumer<byte[]> success,
 		Consumer<String> failure)
 	{
 		boolean chatHidden = hideWidget(config.hideChatInScreenshots(), InterfaceID.Chatbox.CHATAREA);
@@ -430,7 +449,7 @@ public class ImajEventsPlugin extends Plugin
 		{
 			// Queue a second frame so widgets hidden for privacy are absent from the captured image.
 			drawManager.requestNextFrameListener(ignored ->
-				clientThread.invokeLater(() -> requestScreenshotFrame(guideValue, title, restore, success, failure)));
+				clientThread.invokeLater(() -> requestScreenshotFrame(setup, title, restore, success, failure)));
 		}
 		catch (RuntimeException ex)
 		{
@@ -440,7 +459,7 @@ public class ImajEventsPlugin extends Plugin
 		}
 	}
 
-	private void requestScreenshotFrame(Long guideValue, String title, Runnable restore,
+	private void requestScreenshotFrame(SetupSnapshot setup, String title, Runnable restore,
 		Consumer<byte[]> success, Consumer<String> failure)
 	{
 		try
@@ -452,7 +471,7 @@ public class ImajEventsPlugin extends Plugin
 				Graphics2D graphics = copy.createGraphics();
 				graphics.drawImage(frame, 0, 0, null);
 				graphics.dispose();
-				BufferedImage reportImage = guideValue == null ? copy : appendGuideValuePanel(copy, title, guideValue);
+				BufferedImage reportImage = setup == null ? copy : appendGuideValuePanel(copy, title, setup);
 				executor.execute(() -> {
 					try
 					{
@@ -474,10 +493,11 @@ public class ImajEventsPlugin extends Plugin
 		}
 	}
 
-	private BufferedImage appendGuideValuePanel(BufferedImage screenshot, String title, long guideValue)
+	private BufferedImage appendGuideValuePanel(BufferedImage screenshot, String title, SetupSnapshot setup)
 	{
-		int panelWidth = 330;
-		int outputHeight = screenshot.getHeight();
+		int panelWidth = 700;
+		int itemRows = Math.max(setup.equipment.size(), setup.inventory.size());
+		int outputHeight = Math.max(screenshot.getHeight(), 164 + itemRows * 15);
 		BufferedImage combined = new BufferedImage(screenshot.getWidth() + panelWidth,
 			outputHeight, BufferedImage.TYPE_INT_RGB);
 		Graphics2D graphics = combined.createGraphics();
@@ -491,15 +511,46 @@ public class ImajEventsPlugin extends Plugin
 		graphics.drawString("Imaj's Events — " + title, screenshot.getWidth() + 14, 24);
 		graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
 		graphics.setColor(new Color(235, 225, 255));
-		graphics.drawString("TOTAL GUIDE VALUE", screenshot.getWidth() + 14, 54);
-		graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 16));
+		graphics.drawString("TOTAL GUIDE VALUE", screenshot.getWidth() + 14, 52);
+		graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 15));
 		graphics.setColor(Color.WHITE);
-		graphics.drawString(formatGp(guideValue) + " gp", screenshot.getWidth() + 14, 79);
-		graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+		graphics.drawString(formatGp(setup.totalValue) + " gp", screenshot.getWidth() + 14, 74);
+		graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
 		graphics.setColor(Color.LIGHT_GRAY);
-		graphics.drawString("Equipment + inventory", screenshot.getWidth() + 14, 101);
+		graphics.drawString("Each line: quantity × unit guide value = line total", screenshot.getWidth() + 14, 94);
+		drawSetupColumn(graphics, "EQUIPMENT", setup.equipment, screenshot.getWidth() + 14, 124);
+		drawSetupColumn(graphics, "INVENTORY", setup.inventory, screenshot.getWidth() + 356, 124);
 		graphics.dispose();
 		return combined;
+	}
+
+	private void drawSetupColumn(Graphics2D graphics, String heading, List<SetupItem> items, int x, int y)
+	{
+		graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+		graphics.setColor(new Color(235, 225, 255));
+		graphics.drawString(heading, x, y);
+		graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+		int lineY = y + 20;
+		if (items.isEmpty())
+		{
+			graphics.setColor(Color.LIGHT_GRAY);
+			graphics.drawString("Empty", x, lineY);
+			return;
+		}
+		for (SetupItem item : items)
+		{
+			graphics.setColor(Color.WHITE);
+			graphics.drawString(shorten(item.name, 24), x, lineY);
+			graphics.setColor(Color.LIGHT_GRAY);
+			graphics.drawString(formatGp(item.quantity) + " × " + formatGp(item.unitPrice)
+				+ " = " + formatGp(item.totalValue) + " gp", x + 145, lineY);
+			lineY += 15;
+		}
+	}
+
+	private static String shorten(String value, int maximum)
+	{
+		return value.length() <= maximum ? value : value.substring(0, maximum - 1) + "…";
 	}
 
 	private String formatGp(Object value)
@@ -620,14 +671,14 @@ public class ImajEventsPlugin extends Plugin
 		attempt.bossCompleted = true;
 		attempt.detectedBoss = detectedBoss;
 		attempt.killCount = killCount;
-		long endingGuideValue = currentSetupGuideValue();
-		attempt.endingGuideValue = endingGuideValue;
+		SetupSnapshot endingSetup = currentSetupSnapshot();
+		attempt.endingGuideValue = endingSetup.totalValue;
 
 		if (panel != null)
 		{
 			panel.showSpecialKillStatus("Finishing " + detectedBoss + "...");
 		}
-		captureScreenshot(endingGuideValue, "Special Kill — ending setup", endingScreenshot -> {
+		captureScreenshot(endingSetup, "Special Kill — ending setup", endingScreenshot -> {
 			attempt.endingScreenshot = endingScreenshot;
 			trySendSpecialKill(attempt);
 			if (panel != null)
@@ -725,7 +776,7 @@ public class ImajEventsPlugin extends Plugin
 			quantities.merge(canonicalId, (long) item.getQuantity(), Long::sum);
 		}
 
-		List<Map<String, Object>> payloads = new ArrayList<>();
+		List<Map<String, Object>> acceptedItems = new ArrayList<>();
 		for (Map.Entry<Integer, Long> entry : quantities.entrySet())
 		{
 			int itemId = entry.getKey();
@@ -741,41 +792,33 @@ public class ImajEventsPlugin extends Plugin
 				continue;
 			}
 
-			Map<String, Object> payload = baseEvent("LOOT");
-			payload.put("source", source == null ? "Unknown" : source);
-			payload.put("itemId", itemId);
-			payload.put("itemName", itemName);
-			payload.put("quantity", quantity);
-			payload.put("unitPrice", unitPrice);
-			payload.put("totalValue", totalValue);
-			payloads.add(payload);
+			Map<String, Object> acceptedItem = new LinkedHashMap<>();
+			acceptedItem.put("itemId", itemId);
+			acceptedItem.put("itemName", itemName);
+			acceptedItem.put("quantity", quantity);
+			acceptedItem.put("unitPrice", unitPrice);
+			acceptedItem.put("totalValue", totalValue);
+			acceptedItems.add(acceptedItem);
 		}
 
-		if (payloads.isEmpty())
+		if (acceptedItems.isEmpty())
 		{
 			return;
 		}
+		Map<String, Object> payload = baseEvent("LOOT");
+		payload.put("source", source == null ? "Unknown" : source);
+		payload.put("items", acceptedItems);
 		if (profile.isLootScreenshotsEnabled() && config.lootScreenshots())
 		{
-			captureScreenshot(null, "", screenshot -> {
-				for (Map<String, Object> payload : payloads)
-				{
-					serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload, screenshot);
-				}
-			}, error -> {
+			captureScreenshot(null, "", screenshot ->
+				serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload, screenshot), error -> {
 				log.warn("{}; sending loot without a screenshot", error);
-				for (Map<String, Object> payload : payloads)
-				{
-					serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
-				}
+				serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
 			});
 		}
 		else
 		{
-			for (Map<String, Object> payload : payloads)
-			{
-				serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
-			}
+			serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
 		}
 	}
 
@@ -913,6 +956,36 @@ public class ImajEventsPlugin extends Plugin
 			this.boss = boss;
 			this.startingGuideValue = startingGuideValue;
 			this.startingScreenshot = startingScreenshot;
+		}
+	}
+
+	private static final class SetupSnapshot
+	{
+		private final List<SetupItem> equipment;
+		private final List<SetupItem> inventory;
+		private final long totalValue;
+
+		private SetupSnapshot(List<SetupItem> equipment, List<SetupItem> inventory, long totalValue)
+		{
+			this.equipment = equipment;
+			this.inventory = inventory;
+			this.totalValue = totalValue;
+		}
+	}
+
+	private static final class SetupItem
+	{
+		private final String name;
+		private final long quantity;
+		private final long unitPrice;
+		private final long totalValue;
+
+		private SetupItem(String name, long quantity, long unitPrice)
+		{
+			this.name = name;
+			this.quantity = quantity;
+			this.unitPrice = unitPrice;
+			this.totalValue = quantity * unitPrice;
 		}
 	}
 }
