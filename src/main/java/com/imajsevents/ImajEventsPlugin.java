@@ -368,7 +368,7 @@ public class ImajEventsPlugin extends Plugin
 		{
 			setup = currentSetupSnapshot();
 			payload.put("setupTotalValue", setup.totalValue);
-			payload.put("priceBasis", "Jagex item-definition guide value");
+			payload.put("priceBasis", "RuneLite mapped market value with Jagex guide fallback");
 		}
 
 		if (profile.isKillCountScreenshotsEnabled() && config.completionScreenshots())
@@ -471,7 +471,7 @@ public class ImajEventsPlugin extends Plugin
 				Graphics2D graphics = copy.createGraphics();
 				graphics.drawImage(frame, 0, 0, null);
 				graphics.dispose();
-				BufferedImage reportImage = setup == null ? copy : appendGuideValuePanel(copy, title, setup);
+				BufferedImage reportImage = setup == null ? copy : appendRiskValuePanel(copy, title, setup);
 				executor.execute(() -> {
 					try
 					{
@@ -493,7 +493,7 @@ public class ImajEventsPlugin extends Plugin
 		}
 	}
 
-	private BufferedImage appendGuideValuePanel(BufferedImage screenshot, String title, SetupSnapshot setup)
+	private BufferedImage appendRiskValuePanel(BufferedImage screenshot, String title, SetupSnapshot setup)
 	{
 		int panelWidth = 700;
 		int itemRows = Math.max(setup.equipment.size(), setup.inventory.size());
@@ -511,13 +511,13 @@ public class ImajEventsPlugin extends Plugin
 		graphics.drawString("Imaj's Events — " + title, screenshot.getWidth() + 14, 24);
 		graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
 		graphics.setColor(new Color(235, 225, 255));
-		graphics.drawString("TOTAL GUIDE VALUE", screenshot.getWidth() + 14, 52);
+		graphics.drawString("TOTAL RISK VALUE", screenshot.getWidth() + 14, 52);
 		graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 15));
 		graphics.setColor(Color.WHITE);
 		graphics.drawString(formatGp(setup.totalValue) + " gp", screenshot.getWidth() + 14, 74);
 		graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
 		graphics.setColor(Color.LIGHT_GRAY);
-		graphics.drawString("Each line: quantity × unit guide value = line total", screenshot.getWidth() + 14, 94);
+		graphics.drawString("Each line: quantity × unit risk value = line total", screenshot.getWidth() + 14, 94);
 		drawSetupColumn(graphics, "EQUIPMENT", setup.equipment, screenshot.getWidth() + 14, 124);
 		drawSetupColumn(graphics, "INVENTORY", setup.inventory, screenshot.getWidth() + 356, 124);
 		graphics.dispose();
@@ -557,23 +557,24 @@ public class ImajEventsPlugin extends Plugin
 	{
 		ItemComposition composition = itemManager.getItemComposition(itemId);
 		Long override = findItemValueOverride(profile.getItemValueOverrides(), itemId, itemName);
-		long currentGeValue = composition.isTradeable()
-			? itemManager.getItemPriceWithSource(itemId, true)
-			: 0L;
+		// ItemManager applies RuneLite's ItemMapping before looking up a price. Asking it for
+		// every item is important: untradeables such as Ferocious gloves and Amulet of
+		// rancour (s) map to the live value of their tradeable counterpart/components.
+		long runeLiteValue = itemManager.getItemPriceWithSource(itemId, true);
 		long guideValue = composition.getPrice();
-		long value = chooseItemUnitValue(composition.isTradeable(), currentGeValue, guideValue, override);
+		long value = chooseItemUnitValue(runeLiteValue, guideValue, override);
 		String source = override != null ? "override"
-			: composition.isTradeable() && currentGeValue > 0L ? "GE" : "guide";
+			: runeLiteValue > 0L ? composition.isTradeable() ? "GE" : "mapped" : "guide";
 		return new ResolvedItemValue(value, source);
 	}
 
-	static long chooseItemUnitValue(boolean tradeable, long currentGeValue, long guideValue, Long override)
+	static long chooseItemUnitValue(long runeLiteValue, long guideValue, Long override)
 	{
 		if (override != null)
 		{
 			return Math.max(0L, override);
 		}
-		return Math.max(0L, tradeable && currentGeValue > 0L ? currentGeValue : guideValue);
+		return Math.max(0L, runeLiteValue > 0L ? runeLiteValue : guideValue);
 	}
 
 	static Long findItemValueOverride(Map<String, Long> overrides, int itemId, String itemName)
@@ -788,7 +789,7 @@ public class ImajEventsPlugin extends Plugin
 		payload.put("startingGuideValue", attempt.startingGuideValue);
 		payload.put("endingGuideValue", attempt.endingGuideValue);
 		payload.put("guideValueUsed", Math.max(0L, attempt.startingGuideValue - attempt.endingGuideValue));
-		payload.put("priceBasis", "Jagex item-definition guide value");
+		payload.put("priceBasis", "RuneLite mapped market value with Jagex guide fallback");
 		serviceClient.sendSpecialKillEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload,
 			attempt.startingScreenshot, attempt.endingScreenshot);
 		if (specialKillAttempt == attempt)
