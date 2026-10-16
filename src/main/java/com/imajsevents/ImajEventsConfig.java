@@ -17,6 +17,13 @@ public interface ImajEventsConfig extends Config
 	)
 	String connectionSection = "connection";
 
+	@ConfigSection(
+		name = "Completion screenshots",
+		description = "Optional screenshots for kill-count and completion events",
+		position = 1
+	)
+	String screenshotSection = "screenshots";
+
 	@ConfigItem(
 		keyName = "thirdPartyConnection",
 		name = "Enable event connection",
@@ -40,6 +47,31 @@ public interface ImajEventsConfig extends Config
 	default String serviceBaseUrl()
 	{
 		return "";
+	}
+
+	@ConfigItem(
+		keyName = "completionScreenshots",
+		name = "Upload completion screenshots",
+		description = "When the competition profile also permits it, attach a screenshot to kill-count and completion reports",
+		position = 0,
+		section = screenshotSection,
+		warning = "Screenshots may contain visible game information and are sent to the configured 3rd-party service"
+	)
+	default boolean completionScreenshots()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "hideChatInScreenshots",
+		name = "Hide chat in screenshots",
+		description = "Temporarily hides public chat and private messages from captured completion screenshots",
+		position = 1,
+		section = screenshotSection
+	)
+	default boolean hideChatInScreenshots()
+	{
+		return true;
 	}
 
 	@ConfigItem(
