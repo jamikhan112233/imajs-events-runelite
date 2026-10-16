@@ -8,6 +8,7 @@ import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -366,10 +367,11 @@ public class ImajEventsPlugin extends Plugin
 				Graphics2D graphics = copy.createGraphics();
 				graphics.drawImage(frame, 0, 0, null);
 				graphics.dispose();
+				BufferedImage reportImage = appendSetupPanel(copy, payload);
 				executor.execute(() -> {
 					try
 					{
-						serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload, jpeg(copy));
+						serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload, jpeg(reportImage));
 					}
 					catch (IOException ex)
 					{
@@ -385,6 +387,78 @@ public class ImajEventsPlugin extends Plugin
 			log.debug("Unable to capture completion screenshot", ex);
 			serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
 		}
+	}
+
+	private BufferedImage appendSetupPanel(BufferedImage screenshot, Map<String, Object> payload)
+	{
+		if (!payload.containsKey("setupTotalValue"))
+		{
+			return screenshot;
+		}
+		List<String> lines = new ArrayList<>();
+		lines.add("EQUIPMENT");
+		appendItemLines(lines, payload.get("equipment"));
+		lines.add("");
+		lines.add("INVENTORY");
+		appendItemLines(lines, payload.get("inventory"));
+		lines.add("");
+		lines.add("TOTAL: " + formatGp(payload.get("setupTotalValue")) + " gp");
+
+		int panelWidth = 390;
+		int lineHeight = 17;
+		int outputHeight = Math.max(screenshot.getHeight(), 28 + lines.size() * lineHeight);
+		BufferedImage combined = new BufferedImage(screenshot.getWidth() + panelWidth,
+			outputHeight, BufferedImage.TYPE_INT_RGB);
+		Graphics2D graphics = combined.createGraphics();
+		graphics.setColor(new Color(28, 30, 34));
+		graphics.fillRect(0, 0, combined.getWidth(), combined.getHeight());
+		graphics.drawImage(screenshot, 0, 0, null);
+		graphics.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING,
+			java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+		graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 15));
+		graphics.setColor(new Color(190, 160, 255));
+		graphics.drawString("Imaj's Events — completion setup", screenshot.getWidth() + 14, 22);
+		graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
+		int y = 42;
+		for (String line : lines)
+		{
+			boolean heading = "EQUIPMENT".equals(line) || "INVENTORY".equals(line) || line.startsWith("TOTAL:");
+			graphics.setColor(heading ? new Color(235, 225, 255) : Color.WHITE);
+			graphics.drawString(line, screenshot.getWidth() + 14, y);
+			y += lineHeight;
+		}
+		graphics.dispose();
+		return combined;
+	}
+
+	private void appendItemLines(List<String> lines, Object value)
+	{
+		if (!(value instanceof List))
+		{
+			lines.add("None recorded");
+			return;
+		}
+		for (Object item : (List<?>) value)
+		{
+			if (!(item instanceof Map))
+			{
+				continue;
+			}
+			Map<?, ?> fields = (Map<?, ?>) item;
+			String name = String.valueOf(fields.get("name"));
+			String quantity = String.valueOf(fields.get("quantity"));
+			String line = name + " x" + quantity + " — " + formatGp(fields.get("totalValue")) + " gp";
+			lines.add(line.length() > 48 ? line.substring(0, 47) + "…" : line);
+		}
+	}
+
+	private String formatGp(Object value)
+	{
+		if (!(value instanceof Number))
+		{
+			return "0";
+		}
+		return NumberFormat.getIntegerInstance(Locale.US).format(((Number) value).longValue());
 	}
 
 	private boolean hideWidget(boolean hide, int componentId)
