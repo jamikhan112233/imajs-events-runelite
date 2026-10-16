@@ -29,11 +29,11 @@ The competition profile controls two server-owned lists:
 - `allowedLootItems`: empty allows all items; otherwise only matching items are sent.
 - `ignoredLootItems`: matching items are never sent and override the allowlist.
 
-Rules accept exact item names, numeric item IDs, or case-insensitive `*` wildcards such as `Godsword shard *`. The minimum loot value is applied to each individual item stack, not the combined drop.
+Rules accept exact item names, numeric item IDs, or case-insensitive `*` wildcards such as `Godsword shard *`. The minimum loot value is applied to each individual item stack using its built-in Jagex item-definition guide value, not a Grand Exchange or Wiki price and not the combined drop.
 
 ## Setup guide values and screenshots
 
-When setup capture is enabled, the plugin calculates one combined equipment-plus-inventory value using RuneLite's Jagex market-price source. Items without a market-price record fall back to their in-game item-definition value, preventing untradeables such as capes from being counted as zero. The KC webhook text does not display that value. Its screenshot audit panel lists every equipment and inventory line as quantity × unit value = line total so the calculation can be checked without transmitting the item breakdown as event data.
+When setup capture is enabled, the plugin calculates one combined equipment-plus-inventory value using the built-in Jagex item-definition guide value for every item. It does not use Grand Exchange, Wiki, or actively traded prices. This gives tradeable and untradeable items the same value source and prevents items such as capes from being counted as zero. The KC webhook text does not display that value. Its screenshot audit panel lists every equipment and inventory line as quantity × unit guide value = line total so the calculation can be checked without transmitting the item breakdown as event data.
 
 Screenshots require both sides to opt in. Completion screenshots require organizer permission plus the player's **Upload completion screenshots** switch. Loot screenshots use a separate organizer permission and local **Upload loot screenshots** switch; one captured frame is attached to the grouped source message. Setup screenshots include the total and its equipment/inventory line-item audit. Chat and private-message widgets are hidden during capture by default.
 
