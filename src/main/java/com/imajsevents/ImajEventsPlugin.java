@@ -45,7 +45,6 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.eventbus.Subscribe;
-import net.runelite.client.events.NpcLootReceived;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
@@ -169,15 +168,6 @@ public class ImajEventsPlugin extends Plugin
 				applyProfile(updated);
 				onUi(() -> success.accept(updated));
 			}, error -> onUi(() -> failure.accept(error)));
-	}
-
-	@Subscribe
-	public void onNpcLootReceived(NpcLootReceived event)
-	{
-		if (profile.isLootEnabled())
-		{
-			sendLoot(event.getNpc().getName(), event.getItems());
-		}
 	}
 
 	@Subscribe
@@ -361,9 +351,26 @@ public class ImajEventsPlugin extends Plugin
 		};
 		try
 		{
+			// Queue a second frame so widgets hidden for privacy are absent from the captured image.
+			drawManager.requestNextFrameListener(ignored ->
+				clientThread.invokeLater(() -> requestCompletionFrame(payload, restore)));
+		}
+		catch (RuntimeException ex)
+		{
+			restore.run();
+			log.warn("Unable to schedule completion screenshot", ex);
+			serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+		}
+	}
+
+	private void requestCompletionFrame(Map<String, Object> payload, Runnable restore)
+	{
+		try
+		{
 			drawManager.requestNextFrameListener(frame -> {
 				restore.run();
-				BufferedImage copy = new BufferedImage(frame.getWidth(null), frame.getHeight(null), BufferedImage.TYPE_INT_RGB);
+				BufferedImage copy = new BufferedImage(frame.getWidth(null), frame.getHeight(null),
+					BufferedImage.TYPE_INT_RGB);
 				Graphics2D graphics = copy.createGraphics();
 				graphics.drawImage(frame, 0, 0, null);
 				graphics.dispose();
@@ -371,11 +378,12 @@ public class ImajEventsPlugin extends Plugin
 				executor.execute(() -> {
 					try
 					{
-						serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload, jpeg(reportImage));
+						serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload,
+							jpeg(reportImage));
 					}
 					catch (IOException ex)
 					{
-						log.debug("Unable to encode completion screenshot", ex);
+						log.warn("Unable to encode completion screenshot; sending the event without it", ex);
 						serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
 					}
 				});
@@ -384,7 +392,7 @@ public class ImajEventsPlugin extends Plugin
 		catch (RuntimeException ex)
 		{
 			restore.run();
-			log.debug("Unable to capture completion screenshot", ex);
+			log.warn("Unable to capture completion screenshot; sending the event without it", ex);
 			serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
 		}
 	}
@@ -561,28 +569,64 @@ public class ImajEventsPlugin extends Plugin
 		{
 			return;
 		}
-		long totalValue = 0;
-		List<Map<String, Object>> serializedItems = new ArrayList<>();
+
+		Map<Integer, Long> quantities = new LinkedHashMap<>();
 		for (ItemStack item : items)
 		{
-			long price = itemManager.getItemPrice(item.getId());
-			long value = (long) price * item.getQuantity();
-			totalValue += value;
-			Map<String, Object> serialized = new LinkedHashMap<>();
-			serialized.put("itemId", item.getId());
-			serialized.put("quantity", item.getQuantity());
-			serialized.put("unitPrice", price);
-			serializedItems.add(serialized);
+			int canonicalId = itemManager.canonicalize(item.getId());
+			quantities.merge(canonicalId, (long) item.getQuantity(), Long::sum);
 		}
-		if (totalValue < profile.getMinimumLootValue())
+
+		for (Map.Entry<Integer, Long> entry : quantities.entrySet())
 		{
-			return;
+			int itemId = entry.getKey();
+			long quantity = entry.getValue();
+			String itemName = itemManager.getItemComposition(itemId).getName();
+			long unitPrice = itemId == 995 ? 1L : itemId == 13204 ? 1000L
+				: itemManager.getItemPrice(itemId);
+			long totalValue = unitPrice * quantity;
+			if (totalValue < profile.getMinimumLootValue()
+				|| !lootItemAllowed(profile.getAllowedLootItems(), profile.getIgnoredLootItems(),
+					itemName, itemId))
+			{
+				continue;
+			}
+
+			Map<String, Object> payload = baseEvent("LOOT");
+			payload.put("source", source == null ? "Unknown" : source);
+			payload.put("itemId", itemId);
+			payload.put("itemName", itemName);
+			payload.put("quantity", quantity);
+			payload.put("unitPrice", unitPrice);
+			payload.put("totalValue", totalValue);
+			serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
 		}
-		Map<String, Object> payload = baseEvent("LOOT");
-		payload.put("source", source == null ? "Unknown" : source);
-		payload.put("totalValue", totalValue);
-		payload.put("items", serializedItems);
-		serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+	}
+
+	static boolean lootItemAllowed(List<String> allowed, List<String> ignored, String itemName, int itemId)
+	{
+		if (matchesLootRule(ignored, itemName, itemId))
+		{
+			return false;
+		}
+		return allowed == null || allowed.isEmpty() || matchesLootRule(allowed, itemName, itemId);
+	}
+
+	private static boolean matchesLootRule(List<String> rules, String itemName, int itemId)
+	{
+		if (rules == null)
+		{
+			return false;
+		}
+		for (String candidate : rules)
+		{
+			String rule = candidate == null ? "" : candidate.trim();
+			if (!rule.isEmpty() && (rule.equals(String.valueOf(itemId)) || wildcardMatch(rule, itemName)))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private Map<String, Object> baseEvent(String type)
