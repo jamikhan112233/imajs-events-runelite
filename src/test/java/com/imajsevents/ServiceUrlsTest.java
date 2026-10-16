@@ -1,5 +1,7 @@
 package com.imajsevents;
 
+import java.util.Arrays;
+import java.util.Collections;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -34,5 +36,22 @@ public class ServiceUrlsTest
 			"You have completed * raids.", "You have completed 20 RAIDS."));
 		assertFalse(ImajEventsPlugin.wildcardMatch(
 			"New personal best: *", "Your Vorkath kill count is: 3."));
+	}
+
+	@Test
+	public void lootItemRulesSupportAllowIgnoreIdsAndWildcards()
+	{
+		assertTrue(ImajEventsPlugin.lootItemAllowed(
+			Collections.emptyList(), Collections.emptyList(), "Twisted bow", 20997));
+		assertTrue(ImajEventsPlugin.lootItemAllowed(
+			Arrays.asList("Twisted bow"), Collections.emptyList(), "TWISTED BOW", 20997));
+		assertTrue(ImajEventsPlugin.lootItemAllowed(
+			Arrays.asList("Godsword shard *"), Collections.emptyList(), "Godsword shard 2", 11820));
+		assertTrue(ImajEventsPlugin.lootItemAllowed(
+			Arrays.asList("20997"), Collections.emptyList(), "Anything", 20997));
+		assertFalse(ImajEventsPlugin.lootItemAllowed(
+			Arrays.asList("Twisted bow"), Collections.emptyList(), "Coins", 995));
+		assertFalse(ImajEventsPlugin.lootItemAllowed(
+			Collections.emptyList(), Arrays.asList("Coins"), "Coins", 995));
 	}
 }
