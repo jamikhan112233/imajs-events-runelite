@@ -1,5 +1,7 @@
 package com.imajsevents;
 
+import java.util.ArrayList;
+import java.util.List;
 import lombok.Data;
 
 @Data
@@ -11,6 +13,12 @@ public class CompetitionProfile
 	private int minimumLootValue;
 	private boolean levelEnabled;
 	private boolean deathEnabled;
+	private boolean killCountEnabled;
+	private boolean setupCaptureEnabled;
+	private boolean killCountScreenshotsEnabled;
+	private boolean speedrunEnabled;
+	private boolean customChatEnabled;
+	private List<String> customChatMessages = new ArrayList<>();
 
 	public static CompetitionProfile disabled()
 	{
