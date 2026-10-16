@@ -7,20 +7,20 @@ import static org.junit.Assert.assertEquals;
 public class ImajEventsPricingTest
 {
 	@Test
-	public void marketValueWinsWhenAvailable()
+	public void builtInGuideValueIsUsedDirectly()
 	{
-		assertEquals(1_250_000L, ImajEventsPlugin.chooseSetupUnitValue(1_250_000L, 225_000L));
+		assertEquals(225_000L, ImajEventsPlugin.builtInGuideValue(225_000L));
 	}
 
 	@Test
-	public void inGameValueIsUsedForUntradeables()
+	public void zeroValueRemainsZero()
 	{
-		assertEquals(225_000L, ImajEventsPlugin.chooseSetupUnitValue(0L, 225_000L));
+		assertEquals(0L, ImajEventsPlugin.builtInGuideValue(0L));
 	}
 
 	@Test
 	public void negativeMissingValuesAreClampedToZero()
 	{
-		assertEquals(0L, ImajEventsPlugin.chooseSetupUnitValue(0L, -1L));
+		assertEquals(0L, ImajEventsPlugin.builtInGuideValue(-1L));
 	}
 }
