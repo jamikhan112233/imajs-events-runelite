@@ -8,7 +8,7 @@ A participant enrolls with a competition name, competition password, and the Run
 
 The competition service can independently enable:
 
-- Loot notifications and a minimum total Grand Exchange value
+- Per-item Loot Tracker notifications, a minimum per-item stack value, and organizer-owned allow/ignore item rules
 - Level-up notifications
 - Player-death notifications
 - Kill-count and completion notifications
@@ -18,6 +18,17 @@ The competition service can independently enable:
 - Custom system/game-message rules using case-insensitive `*` wildcards
 
 Profiles refresh when the plugin starts and approximately every five minutes.
+
+## Loot items and organizer filters
+
+Loot is sourced from RuneLite's built-in Loot Tracker event. Keep Loot Tracker enabled while using Imaj's Events. Each distinct item stack is submitted as its own event and Discord message; multiple quantities of the same item remain one stack.
+
+The competition profile controls two server-owned lists:
+
+- `allowedLootItems`: empty allows all items; otherwise only matching items are sent.
+- `ignoredLootItems`: matching items are never sent and override the allowlist.
+
+Rules accept exact item names, numeric item IDs, or case-insensitive `*` wildcards such as `Godsword shard *`. The minimum loot value is applied to each individual item stack, not the combined drop.
 
 ## Completion setup values and screenshots
 
@@ -31,7 +42,7 @@ When setup capture is enabled, every detected kill-count/completion report inclu
 
 Untradeable items can show a value of zero when RuneLite has no Grand Exchange mapping. Coins and platinum tokens use their face values.
 
-Screenshots require both sides to opt in: the organizer must permit them in the competition profile and the player must enable **Upload completion screenshots** in RuneLite. Screenshots are JPEG files attached to the same completion event. When setup capture is enabled, the image receives a side panel listing the equipment, inventory, and total setup value. Chat and private-message widgets are hidden during capture by default.
+Screenshots require both sides to opt in: the organizer must permit them in the competition profile and the player must enable **Upload completion screenshots** in RuneLite. Screenshots are JPEG files attached only to kill-count/completion events, not ordinary loot messages. When setup capture is enabled, the image receives a side panel listing the equipment, inventory, and total setup value. Chat and private-message widgets are hidden during capture by default.
 
 ## Kill counts, speedruns, and custom messages
 
