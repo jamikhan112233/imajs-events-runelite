@@ -11,6 +11,8 @@ public class CompetitionProfile
 	private String registeredRsn = "";
 	private boolean lootEnabled;
 	private int minimumLootValue;
+	private List<String> allowedLootItems = new ArrayList<>();
+	private List<String> ignoredLootItems = new ArrayList<>();
 	private boolean levelEnabled;
 	private boolean deathEnabled;
 	private boolean killCountEnabled;
