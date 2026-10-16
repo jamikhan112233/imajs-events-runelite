@@ -336,7 +336,7 @@ public class ImajEventsPlugin extends Plugin
 				continue;
 			}
 			int canonicalId = itemManager.canonicalize(item.getId());
-			int unitPrice = canonicalId == 995 ? 1 : canonicalId == 13204 ? 1000
+			long unitPrice = canonicalId == 995 ? 1L : canonicalId == 13204 ? 1000L
 				: itemManager.getItemPrice(canonicalId);
 			long value = (long) unitPrice * item.getQuantity();
 			total += value;
@@ -565,7 +565,7 @@ public class ImajEventsPlugin extends Plugin
 		List<Map<String, Object>> serializedItems = new ArrayList<>();
 		for (ItemStack item : items)
 		{
-			int price = itemManager.getItemPrice(item.getId());
+			long price = itemManager.getItemPrice(item.getId());
 			long value = (long) price * item.getQuantity();
 			totalValue += value;
 			Map<String, Object> serialized = new LinkedHashMap<>();
