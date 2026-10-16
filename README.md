@@ -33,7 +33,7 @@ Rules accept exact item names, numeric item IDs, or case-insensitive `*` wildcar
 
 ## Setup guide values and screenshots
 
-When setup capture is enabled, the plugin calculates one combined equipment-plus-inventory value using RuneLite's Jagex guide-price source rather than the optional Wiki/actively-traded price source. The KC webhook text does not display that value. Its screenshot audit panel lists every equipment and inventory line as quantity × unit guide value = line total so the calculation can be checked without transmitting the item breakdown as event data.
+When setup capture is enabled, the plugin calculates one combined equipment-plus-inventory value using RuneLite's Jagex market-price source. Items without a market-price record fall back to their in-game item-definition value, preventing untradeables such as capes from being counted as zero. The KC webhook text does not display that value. Its screenshot audit panel lists every equipment and inventory line as quantity × unit value = line total so the calculation can be checked without transmitting the item breakdown as event data.
 
 Screenshots require both sides to opt in. Completion screenshots require organizer permission plus the player's **Upload completion screenshots** switch. Loot screenshots use a separate organizer permission and local **Upload loot screenshots** switch; one captured frame is attached to the grouped source message. Setup screenshots include the total and its equipment/inventory line-item audit. Chat and private-message widgets are hidden during capture by default.
 
@@ -108,7 +108,7 @@ Test the following manually in game:
 2. Enable it, enter the Worker HTTPS URL, and enroll with a valid competition, password, and RSN.
 3. Confirm qualifying loot, enabled kill counts, times, and custom system messages reach only the competition webhook.
 4. Confirm disabled event types, nonmatching messages, and loot below the configured minimum are not posted.
-5. Complete an activity and verify the screenshot's Jagex guide-value line items and total match the setup while the KC webhook text omits the value.
+5. Complete an activity and verify the screenshot's item-value lines and total match the setup while the KC webhook text omits the value.
 6. Verify loot and completion screenshots each require their corresponding organizer and local permissions.
 7. Start a Special Kill, confirm another boss does not finish it, then complete the selected boss and verify two screenshots and the game's official time.
 8. Generate an RSN code for the participant, use it once, and confirm reuse and expired codes fail.
