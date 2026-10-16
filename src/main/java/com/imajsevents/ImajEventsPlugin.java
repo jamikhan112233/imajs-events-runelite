@@ -367,7 +367,7 @@ public class ImajEventsPlugin extends Plugin
 		{
 			setup = currentSetupSnapshot();
 			payload.put("setupTotalValue", setup.totalValue);
-			payload.put("priceBasis", "RuneLite item price with in-game value fallback");
+			payload.put("priceBasis", "Jagex item-definition guide value");
 		}
 
 		if (profile.isKillCountScreenshotsEnabled() && config.completionScreenshots())
@@ -417,21 +417,7 @@ public class ImajEventsPlugin extends Plugin
 		for (Map.Entry<Integer, Long> entry : quantities.entrySet())
 		{
 			int canonicalId = entry.getKey();
-			long guidePrice;
-			if (canonicalId == 995)
-			{
-				guidePrice = 1L;
-			}
-			else if (canonicalId == 13204)
-			{
-				guidePrice = 1000L;
-			}
-			else
-			{
-				long marketValue = itemManager.getItemPriceWithSource(canonicalId, false);
-				long inGameValue = itemManager.getItemComposition(canonicalId).getPrice();
-				guidePrice = chooseSetupUnitValue(marketValue, inGameValue);
-			}
+			long guidePrice = builtInGuideValue(itemManager.getItemComposition(canonicalId).getPrice());
 			String name = itemManager.getItemComposition(canonicalId).getName();
 			values.add(new SetupItem(name, entry.getValue(), guidePrice));
 		}
@@ -524,13 +510,13 @@ public class ImajEventsPlugin extends Plugin
 		graphics.drawString("Imaj's Events — " + title, screenshot.getWidth() + 14, 24);
 		graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
 		graphics.setColor(new Color(235, 225, 255));
-		graphics.drawString("TOTAL SETUP VALUE", screenshot.getWidth() + 14, 52);
+		graphics.drawString("TOTAL GUIDE VALUE", screenshot.getWidth() + 14, 52);
 		graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 15));
 		graphics.setColor(Color.WHITE);
 		graphics.drawString(formatGp(setup.totalValue) + " gp", screenshot.getWidth() + 14, 74);
 		graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
 		graphics.setColor(Color.LIGHT_GRAY);
-		graphics.drawString("Each line: quantity × unit value = line total", screenshot.getWidth() + 14, 94);
+		graphics.drawString("Each line: quantity × unit guide value = line total", screenshot.getWidth() + 14, 94);
 		drawSetupColumn(graphics, "EQUIPMENT", setup.equipment, screenshot.getWidth() + 14, 124);
 		drawSetupColumn(graphics, "INVENTORY", setup.inventory, screenshot.getWidth() + 356, 124);
 		graphics.dispose();
@@ -566,9 +552,9 @@ public class ImajEventsPlugin extends Plugin
 		return value.length() <= maximum ? value : value.substring(0, maximum - 1) + "…";
 	}
 
-	static long chooseSetupUnitValue(long marketValue, long inGameValue)
+	static long builtInGuideValue(long inGameValue)
 	{
-		return Math.max(0L, marketValue > 0L ? marketValue : inGameValue);
+		return Math.max(0L, inGameValue);
 	}
 
 	private String formatGp(Object value)
@@ -761,7 +747,7 @@ public class ImajEventsPlugin extends Plugin
 		payload.put("startingGuideValue", attempt.startingGuideValue);
 		payload.put("endingGuideValue", attempt.endingGuideValue);
 		payload.put("guideValueUsed", Math.max(0L, attempt.startingGuideValue - attempt.endingGuideValue));
-		payload.put("priceBasis", "RuneLite item price with in-game value fallback");
+		payload.put("priceBasis", "Jagex item-definition guide value");
 		serviceClient.sendSpecialKillEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload,
 			attempt.startingScreenshot, attempt.endingScreenshot);
 		if (specialKillAttempt == attempt)
@@ -800,8 +786,7 @@ public class ImajEventsPlugin extends Plugin
 			int itemId = entry.getKey();
 			long quantity = entry.getValue();
 			String itemName = itemManager.getItemComposition(itemId).getName();
-			long unitPrice = itemId == 995 ? 1L : itemId == 13204 ? 1000L
-				: itemManager.getItemPrice(itemId);
+			long unitPrice = builtInGuideValue(itemManager.getItemComposition(itemId).getPrice());
 			long totalValue = unitPrice * quantity;
 			if (totalValue < profile.getMinimumLootValue()
 				|| !lootItemAllowed(profile.getAllowedLootItems(), profile.getIgnoredLootItems(),
