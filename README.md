@@ -8,7 +8,7 @@ A participant enrolls with a competition name, competition password, and the Run
 
 The competition service can independently enable:
 
-- Per-item Loot Tracker notifications, a minimum per-item stack value, organizer-owned allow/ignore item rules, and separately opt-in screenshots
+- Grouped Loot Tracker notifications, a minimum per-item stack value, organizer-owned allow/ignore item rules, and separately opt-in screenshots
 - Level-up notifications
 - Player-death notifications
 - Kill-count and completion notifications
@@ -22,7 +22,7 @@ Profiles refresh when the plugin starts and approximately every five minutes.
 
 ## Loot items and organizer filters
 
-Loot is sourced from RuneLite's built-in Loot Tracker event. Keep Loot Tracker enabled while using Imaj's Events. Each distinct item stack is submitted as its own event and Discord message; multiple quantities of the same item remain one stack.
+Loot is sourced from RuneLite's built-in Loot Tracker event. Keep Loot Tracker enabled while using Imaj's Events. All qualifying item stacks from one Loot Tracker source event are submitted together in one Discord message; multiple quantities of the same item remain one stack.
 
 The competition profile controls two server-owned lists:
 
@@ -33,9 +33,9 @@ Rules accept exact item names, numeric item IDs, or case-insensitive `*` wildcar
 
 ## Setup guide values and screenshots
 
-When setup capture is enabled, a detected kill-count/completion report includes one combined equipment-plus-inventory value. The plugin forces RuneLite's Jagex guide-price source rather than the optional Wiki/actively-traded price source. Individual setup item values are not submitted or listed.
+When setup capture is enabled, the plugin calculates one combined equipment-plus-inventory value using RuneLite's Jagex guide-price source rather than the optional Wiki/actively-traded price source. The KC webhook text does not display that value. Its screenshot audit panel lists every equipment and inventory line as quantity × unit guide value = line total so the calculation can be checked without transmitting the item breakdown as event data.
 
-Screenshots require both sides to opt in. Completion screenshots require organizer permission plus the player's **Upload completion screenshots** switch. Loot screenshots use a separate organizer permission and local **Upload loot screenshots** switch; one captured frame is reused across the separate item-stack messages from the same Loot Tracker event. When a guide value is included, the image side panel shows only the combined total. Chat and private-message widgets are hidden during capture by default.
+Screenshots require both sides to opt in. Completion screenshots require organizer permission plus the player's **Upload completion screenshots** switch. Loot screenshots use a separate organizer permission and local **Upload loot screenshots** switch; one captured frame is attached to the grouped source message. Setup screenshots include the total and its equipment/inventory line-item audit. Chat and private-message widgets are hidden during capture by default.
 
 ## Special Kill
 
@@ -108,7 +108,7 @@ Test the following manually in game:
 2. Enable it, enter the Worker HTTPS URL, and enroll with a valid competition, password, and RSN.
 3. Confirm qualifying loot, enabled kill counts, times, and custom system messages reach only the competition webhook.
 4. Confirm disabled event types, nonmatching messages, and loot below the configured minimum are not posted.
-5. Complete an activity and verify the single combined Jagex guide-value total matches the setup.
+5. Complete an activity and verify the screenshot's Jagex guide-value line items and total match the setup while the KC webhook text omits the value.
 6. Verify loot and completion screenshots each require their corresponding organizer and local permissions.
 7. Start a Special Kill, confirm another boss does not finish it, then complete the selected boss and verify two screenshots and the game's official time.
 8. Generate an RSN code for the participant, use it once, and confirm reuse and expired codes fail.
