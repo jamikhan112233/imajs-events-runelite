@@ -5,24 +5,42 @@ import com.google.inject.Provides;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
-import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import javax.imageio.IIOImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Actor;
+import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.Item;
+import net.runelite.api.ItemContainer;
 import net.runelite.api.ItemStack;
 import net.runelite.api.Skill;
 import net.runelite.api.events.ActorDeath;
+import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.StatChanged;
+import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.gameval.InventoryID;
+import net.runelite.api.widgets.Widget;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.eventbus.Subscribe;
@@ -32,36 +50,41 @@ import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.client.ui.ClientToolbar;
+import net.runelite.client.ui.DrawManager;
 import net.runelite.client.ui.NavigationButton;
+import net.runelite.client.util.Text;
 
 @Slf4j
 @PluginDescriptor(
 	name = "Imaj's Events",
 	description = "Connects opted-in RuneLite events to an Imaj's Events competition",
-	tags = {"events", "competition", "loot", "levels"}
+	tags = {"events", "competition", "loot", "levels", "kills", "speedruns"}
 )
 public class ImajEventsPlugin extends Plugin
 {
-	@Inject
-	private Client client;
+	private static final Pattern KC_PATTERN = Pattern.compile(
+		"Your (?<boss>.+?) (?:kill|chest|completion|success|harvest|opened) count is: ?(?<kc>[\\d,]+)\\b",
+		Pattern.CASE_INSENSITIVE);
+	private static final Pattern COMPLETED_PATTERN = Pattern.compile(
+		"Your (?:completed|subdued) (?<boss>.+?) count is: ?(?<kc>[\\d,]+)\\b",
+		Pattern.CASE_INSENSITIVE);
+	private static final Pattern SPEEDRUN_PATTERN = Pattern.compile(
+		"(?<label>Duration|Challenge time|Completion time|Speedrun duration|Subdued in)\\s*:?\\s*" +
+			"(?<time>(?:\\d+:){1,2}\\d{2}(?:\\.\\d+)?)",
+		Pattern.CASE_INSENSITIVE);
+	private static final int MAX_CUSTOM_RULES = 50;
+	private static final float JPEG_QUALITY = 0.85f;
 
-	@Inject
-	private ClientToolbar clientToolbar;
-
-	@Inject
-	private ConfigManager configManager;
-
-	@Inject
-	private Gson gson;
-
-	@Inject
-	private ItemManager itemManager;
-
-	@Inject
-	private ImajEventsConfig config;
-
-	@Inject
-	private ImajEventsServiceClient serviceClient;
+	@Inject private Client client;
+	@Inject private ClientThread clientThread;
+	@Inject private ClientToolbar clientToolbar;
+	@Inject private ConfigManager configManager;
+	@Inject private Gson gson;
+	@Inject private ItemManager itemManager;
+	@Inject private DrawManager drawManager;
+	@Inject private ScheduledExecutorService executor;
+	@Inject private ImajEventsConfig config;
+	@Inject private ImajEventsServiceClient serviceClient;
 
 	private final Map<Skill, Integer> observedLevels = new EnumMap<>(Skill.class);
 	private volatile CompetitionProfile profile = CompetitionProfile.disabled();
@@ -166,6 +189,65 @@ public class ImajEventsPlugin extends Plugin
 	}
 
 	@Subscribe
+	public void onChatMessage(ChatMessage event)
+	{
+		if (!isConnected() || (event.getType() != ChatMessageType.GAMEMESSAGE
+			&& event.getType() != ChatMessageType.SPAM))
+		{
+			return;
+		}
+
+		String message = Text.removeTags(event.getMessage()).trim();
+		if (profile.isKillCountEnabled())
+		{
+			Matcher kc = KC_PATTERN.matcher(message);
+			if (!kc.find())
+			{
+				kc = COMPLETED_PATTERN.matcher(message);
+			}
+			if (kc.find(0))
+			{
+				try
+				{
+					int count = Integer.parseInt(kc.group("kc").replace(",", ""));
+					sendKillCount(kc.group("boss").trim(), count);
+				}
+				catch (NumberFormatException ex)
+				{
+					log.debug("Ignoring invalid kill-count message: {}", message);
+				}
+				return;
+			}
+		}
+
+		if (profile.isSpeedrunEnabled())
+		{
+			Matcher speedrun = SPEEDRUN_PATTERN.matcher(message);
+			if (speedrun.find())
+			{
+				Map<String, Object> payload = baseEvent("SPEEDRUN");
+				payload.put("label", speedrun.group("label"));
+				payload.put("duration", speedrun.group("time"));
+				payload.put("message", message);
+				serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+				return;
+			}
+		}
+
+		if (profile.isCustomChatEnabled())
+		{
+			String rule = matchingCustomRule(message);
+			if (rule != null)
+			{
+				Map<String, Object> payload = baseEvent("CUSTOM_CHAT");
+				payload.put("matchedRule", rule);
+				payload.put("message", message);
+				serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+			}
+		}
+	}
+
+	@Subscribe
 	public void onStatChanged(StatChanged event)
 	{
 		int current = event.getLevel();
@@ -209,6 +291,194 @@ public class ImajEventsPlugin extends Plugin
 		{
 			serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), baseEvent("DEATH"));
 		}
+	}
+
+	private void sendKillCount(String source, int killCount)
+	{
+		Map<String, Object> payload = baseEvent("KILL_COUNT");
+		payload.put("source", source);
+		payload.put("killCount", killCount);
+		if (profile.isSetupCaptureEnabled())
+		{
+			SetupPart equipment = serializeContainer(InventoryID.WORN);
+			SetupPart inventory = serializeContainer(InventoryID.INV);
+			payload.put("equipment", equipment.items);
+			payload.put("inventory", inventory.items);
+			payload.put("equipmentValue", equipment.value);
+			payload.put("inventoryValue", inventory.value);
+			payload.put("setupTotalValue", equipment.value + inventory.value);
+		}
+
+		if (profile.isKillCountScreenshotsEnabled() && config.completionScreenshots())
+		{
+			captureAndSend(payload);
+		}
+		else
+		{
+			serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+		}
+	}
+
+	private SetupPart serializeContainer(int inventoryId)
+	{
+		ItemContainer container = client.getItemContainer(inventoryId);
+		List<Map<String, Object>> result = new ArrayList<>();
+		long total = 0;
+		if (container == null)
+		{
+			return new SetupPart(result, total);
+		}
+		for (Item item : container.getItems())
+		{
+			if (item.getId() <= 0 || item.getQuantity() <= 0)
+			{
+				continue;
+			}
+			int canonicalId = itemManager.canonicalize(item.getId());
+			int unitPrice = canonicalId == 995 ? 1 : canonicalId == 13204 ? 1000
+				: itemManager.getItemPrice(canonicalId);
+			long value = (long) unitPrice * item.getQuantity();
+			total += value;
+			Map<String, Object> serialized = new LinkedHashMap<>();
+			serialized.put("itemId", canonicalId);
+			serialized.put("name", itemManager.getItemComposition(canonicalId).getName());
+			serialized.put("quantity", item.getQuantity());
+			serialized.put("unitPrice", unitPrice);
+			serialized.put("totalValue", value);
+			result.add(serialized);
+		}
+		return new SetupPart(result, total);
+	}
+
+	private void captureAndSend(Map<String, Object> payload)
+	{
+		boolean chatHidden = hideWidget(config.hideChatInScreenshots(), InterfaceID.Chatbox.CHATAREA);
+		boolean pmsHidden = hideWidget(config.hideChatInScreenshots(), InterfaceID.PmChat.CONTAINER);
+		Runnable restore = () -> {
+			showWidget(chatHidden, InterfaceID.Chatbox.CHATAREA);
+			showWidget(pmsHidden, InterfaceID.PmChat.CONTAINER);
+		};
+		try
+		{
+			drawManager.requestNextFrameListener(frame -> {
+				restore.run();
+				BufferedImage copy = new BufferedImage(frame.getWidth(null), frame.getHeight(null), BufferedImage.TYPE_INT_RGB);
+				Graphics2D graphics = copy.createGraphics();
+				graphics.drawImage(frame, 0, 0, null);
+				graphics.dispose();
+				executor.execute(() -> {
+					try
+					{
+						serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload, jpeg(copy));
+					}
+					catch (IOException ex)
+					{
+						log.debug("Unable to encode completion screenshot", ex);
+						serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+					}
+				});
+			});
+		}
+		catch (RuntimeException ex)
+		{
+			restore.run();
+			log.debug("Unable to capture completion screenshot", ex);
+			serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+		}
+	}
+
+	private boolean hideWidget(boolean hide, int componentId)
+	{
+		if (!hide)
+		{
+			return false;
+		}
+		Widget widget = client.getWidget(componentId);
+		if (widget == null || widget.isHidden())
+		{
+			return false;
+		}
+		widget.setHidden(true);
+		return true;
+	}
+
+	private void showWidget(boolean wasHidden, int componentId)
+	{
+		if (!wasHidden)
+		{
+			return;
+		}
+		clientThread.invokeLater(() -> {
+			Widget widget = client.getWidget(componentId);
+			if (widget != null)
+			{
+				widget.setHidden(false);
+			}
+		});
+	}
+
+	private static byte[] jpeg(BufferedImage image) throws IOException
+	{
+		ImageWriter writer = ImageIO.getImageWritersByFormatName("jpg").next();
+		ByteArrayOutputStream output = new ByteArrayOutputStream();
+		try (ImageOutputStream stream = ImageIO.createImageOutputStream(output))
+		{
+			writer.setOutput(stream);
+			ImageWriteParam parameters = writer.getDefaultWriteParam();
+			parameters.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+			parameters.setCompressionQuality(JPEG_QUALITY);
+			writer.write(null, new IIOImage(image, null, null), parameters);
+		}
+		finally
+		{
+			writer.dispose();
+		}
+		return output.toByteArray();
+	}
+
+	private String matchingCustomRule(String message)
+	{
+		List<String> rules = profile.getCustomChatMessages();
+		if (rules == null)
+		{
+			return null;
+		}
+		for (int index = 0; index < Math.min(rules.size(), MAX_CUSTOM_RULES); index++)
+		{
+			String rule = rules.get(index);
+			if (rule != null && !rule.trim().isEmpty() && wildcardMatch(rule.trim(), message))
+			{
+				return rule.trim();
+			}
+		}
+		return null;
+	}
+
+	static boolean wildcardMatch(String pattern, String value)
+	{
+		String expected = pattern.toLowerCase(Locale.ROOT);
+		String actual = value.toLowerCase(Locale.ROOT);
+		String[] parts = expected.split("\\*", -1);
+		int position = 0;
+		if (!expected.startsWith("*") && !actual.startsWith(parts[0]))
+		{
+			return false;
+		}
+		for (String part : parts)
+		{
+			if (part.isEmpty())
+			{
+				continue;
+			}
+			int found = actual.indexOf(part, position);
+			if (found < 0)
+			{
+				return false;
+			}
+			position = found + part.length();
+		}
+		String last = parts[parts.length - 1];
+		return expected.endsWith("*") || actual.endsWith(last);
 	}
 
 	private void sendLoot(String source, java.util.Collection<ItemStack> items)
@@ -313,7 +583,8 @@ public class ImajEventsPlugin extends Plugin
 	{
 		BufferedImage image = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D graphics = image.createGraphics();
-		graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		graphics.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+			java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
 		graphics.setColor(new Color(126, 87, 194));
 		graphics.fillRoundRect(1, 1, 30, 30, 9, 9);
 		graphics.setColor(Color.WHITE);
@@ -327,5 +598,17 @@ public class ImajEventsPlugin extends Plugin
 	ImajEventsConfig provideConfig(ConfigManager manager)
 	{
 		return manager.getConfig(ImajEventsConfig.class);
+	}
+
+	private static final class SetupPart
+	{
+		private final List<Map<String, Object>> items;
+		private final long value;
+
+		private SetupPart(List<Map<String, Object>> items, long value)
+		{
+			this.items = items;
+			this.value = value;
+		}
 	}
 }
