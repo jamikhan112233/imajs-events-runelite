@@ -13,6 +13,8 @@ public class CompetitionProfile
 	private String registeredRsn = "";
 	private boolean lootEnabled;
 	private int minimumLootValue;
+	private int minimumLootScreenshotValue;
+	private boolean requireBothRarityAndValue = true;
 	private List<String> allowedLootItems = new ArrayList<>();
 	private List<String> ignoredLootItems = new ArrayList<>();
 	private Map<String, Long> itemValueOverrides = new LinkedHashMap<>();
