@@ -76,6 +76,19 @@ public interface ImajEventsConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "petScreenshots",
+		name = "Upload pet screenshots",
+		description = "When the competition profile permits it, attach a screenshot to pet reports",
+		position = 3,
+		section = screenshotSection,
+		warning = "Screenshots may contain visible game information and are sent to the official Imaj's Events 3rd-party service"
+	)
+	default boolean petScreenshots()
+	{
+		return false;
+	}
+
+	@ConfigItem(
 		keyName = "enrollmentToken",
 		name = "Enrollment token",
 		description = "Opaque token issued by the service after enrollment",

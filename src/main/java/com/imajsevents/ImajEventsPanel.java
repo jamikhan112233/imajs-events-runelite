@@ -22,8 +22,7 @@ class ImajEventsPanel extends PluginPanel
 	private final ImajEventsPlugin plugin;
 	private final JTextField competitionField = new JTextField();
 	private final JPasswordField passwordField = new JPasswordField();
-	private final JTextField rsnField = new JTextField();
-	private final JTextField newRsnField = new JTextField();
+	private final JLabel currentCharacterLabel = new JLabel("Log into the character you want to enroll");
 	private final JPasswordField changeCodeField = new JPasswordField();
 	private final JButton enrollButton = new JButton("Enroll");
 	private final JButton changeRsnButton = new JButton("Change RSN");
@@ -53,7 +52,9 @@ class ImajEventsPanel extends PluginPanel
 
 		addLabelAndField(form, gbc, "Competition", competitionField);
 		addLabelAndField(form, gbc, "Competition password", passwordField);
-		addLabelAndField(form, gbc, "Registered RSN", rsnField);
+		currentCharacterLabel.setForeground(Color.LIGHT_GRAY);
+		form.add(currentCharacterLabel, gbc);
+		gbc.gridy++;
 		form.add(enrollButton, gbc);
 		gbc.gridy++;
 
@@ -61,7 +62,10 @@ class ImajEventsPanel extends PluginPanel
 		changeTitle.setBorder(BorderFactory.createEmptyBorder(14, 0, 2, 0));
 		form.add(changeTitle, gbc);
 		gbc.gridy++;
-		addLabelAndField(form, gbc, "New RSN", newRsnField);
+		JLabel rsnChangeHelp = new JLabel("Applies the code to your current logged-in character");
+		rsnChangeHelp.setForeground(Color.LIGHT_GRAY);
+		form.add(rsnChangeHelp, gbc);
+		gbc.gridy++;
 		addLabelAndField(form, gbc, "One-time change code", changeCodeField);
 		form.add(changeRsnButton, gbc);
 		gbc.gridy++;
@@ -158,10 +162,10 @@ class ImajEventsPanel extends PluginPanel
 	private void enroll()
 	{
 		setBusy(true, "Enrolling...");
-		plugin.enroll(competitionField.getText(), passwordField.getPassword(), rsnField.getText(),
+		plugin.enroll(competitionField.getText(), passwordField.getPassword(),
 			profile -> {
 				passwordField.setText("");
-				rsnField.setText(profile.getRegisteredRsn());
+				currentCharacterLabel.setText("Registered character: " + profile.getRegisteredRsn());
 				setBusy(false, "Enrolled in " + profile.getCompetitionName());
 			}, error -> setBusy(false, error));
 	}
@@ -170,11 +174,10 @@ class ImajEventsPanel extends PluginPanel
 	{
 		setBusy(true, "Authorizing RSN change...");
 		char[] code = changeCodeField.getPassword();
-		plugin.changeRsn(newRsnField.getText(), new String(code), profile -> {
+		plugin.changeRsn(new String(code), profile -> {
 			java.util.Arrays.fill(code, '\0');
 			changeCodeField.setText("");
-			newRsnField.setText("");
-			rsnField.setText(profile.getRegisteredRsn());
+			currentCharacterLabel.setText("Registered character: " + profile.getRegisteredRsn());
 			setBusy(false, "RSN changed to " + profile.getRegisteredRsn());
 		}, error -> {
 			java.util.Arrays.fill(code, '\0');
@@ -186,7 +189,9 @@ class ImajEventsPanel extends PluginPanel
 	{
 		SwingUtilities.invokeLater(() -> {
 			competitionField.setText(profile.getCompetitionName());
-			rsnField.setText(profile.getRegisteredRsn());
+			currentCharacterLabel.setText(profile.getRegisteredRsn().isEmpty()
+				? "Log into the character you want to enroll"
+				: "Registered character: " + profile.getRegisteredRsn());
 			statusLabel.setText(profile.getCompetitionName().isEmpty()
 				? "Not enrolled"
 				: "Enrolled in " + profile.getCompetitionName());
