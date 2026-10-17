@@ -23,7 +23,7 @@ Profiles refresh when the plugin starts and approximately every five minutes.
 
 ## Loot items and organizer filters
 
-Loot is sourced from RuneLite's built-in Loot Tracker event. Keep Loot Tracker enabled while using Imaj's Events. All qualifying item stacks from one Loot Tracker source event are submitted together in one Discord message; multiple quantities of the same item remain one stack.
+Loot is sourced from RuneLite's built-in Loot Tracker event. Keep Loot Tracker enabled while using Imaj's Events. All qualifying item stacks from one Loot Tracker source event are submitted together in one Discord message; multiple quantities of the same item remain one stack. The competition profile can require both an allowlist match and the minimum value, or allow either condition to qualify the item. Ignore rules always win.
 
 The competition profile controls two server-owned lists:
 
@@ -40,7 +40,7 @@ When setup capture is enabled, the KC webhook text does not display its equipmen
 
 The side panel's **Value Check** button can be pressed repeatedly while logged in. It recalculates and displays the current equipment value, inventory value, and combined total using the same value rules. The check is entirely local: it does not capture a screenshot or send an event to the service or Discord.
 
-Screenshots require both sides to opt in. Completion screenshots require organizer permission plus the player's **Upload completion screenshots** switch. Loot screenshots use a separate organizer permission and local **Upload loot screenshots** switch; one captured frame is attached to the grouped source message. Setup screenshots include the total and its equipment/inventory line-item audit. Chat and private-message widgets are hidden during capture by default.
+Screenshots require both sides to opt in. Completion screenshots require organizer permission plus the player's **Upload completion screenshots** switch. Loot screenshots use a separate organizer permission and local **Upload loot screenshots** switch; one captured frame is attached to the grouped source message only when its accepted combined value meets the organizer's screenshot minimum. Setup screenshots include the total and its equipment/inventory line-item audit. Chat and private-message widgets are hidden during capture by default.
 
 ## Special Kill
 
