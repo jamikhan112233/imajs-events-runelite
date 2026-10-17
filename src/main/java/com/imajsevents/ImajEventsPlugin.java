@@ -147,7 +147,7 @@ public class ImajEventsPlugin extends Plugin
 			return;
 		}
 
-		serviceClient.enroll(config.serviceBaseUrl(), competition, password, rsn, response -> {
+		serviceClient.enroll(competition, password, rsn, response -> {
 			if (response.getEnrollmentToken() == null || response.getProfile() == null)
 			{
 				onUi(() -> failure.accept("The event service returned an incomplete enrollment"));
@@ -171,7 +171,7 @@ public class ImajEventsPlugin extends Plugin
 			failure.accept("New RSN and one-time code are required");
 			return;
 		}
-		serviceClient.changeRsn(config.serviceBaseUrl(), config.enrollmentToken(), newRsn, code,
+		serviceClient.changeRsn(config.enrollmentToken(), newRsn, code,
 			updated -> {
 				applyProfile(updated);
 				onUi(() -> success.accept(updated));
@@ -329,7 +329,7 @@ public class ImajEventsPlugin extends Plugin
 				payload.put("label", speedrun.group("label"));
 				payload.put("duration", speedrun.group("time"));
 				payload.put("message", message);
-				serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+				serviceClient.sendEvent(config.enrollmentToken(), payload);
 				return;
 			}
 		}
@@ -342,7 +342,7 @@ public class ImajEventsPlugin extends Plugin
 				Map<String, Object> payload = baseEvent("CUSTOM_CHAT");
 				payload.put("matchedRule", rule);
 				payload.put("message", message);
-				serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+				serviceClient.sendEvent(config.enrollmentToken(), payload);
 			}
 		}
 	}
@@ -359,7 +359,7 @@ public class ImajEventsPlugin extends Plugin
 		Map<String, Object> payload = baseEvent("LEVEL");
 		payload.put("skill", event.getSkill().getName());
 		payload.put("level", current);
-		serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+		serviceClient.sendEvent(config.enrollmentToken(), payload);
 	}
 
 	@Subscribe
@@ -376,7 +376,7 @@ public class ImajEventsPlugin extends Plugin
 	public void onConfigChanged(ConfigChanged event)
 	{
 		if (ImajEventsConfig.GROUP.equals(event.getGroup())
-			&& ("thirdPartyConnection".equals(event.getKey()) || "serviceBaseUrl".equals(event.getKey())))
+			&& "thirdPartyConnection".equals(event.getKey()))
 		{
 			profileRefreshTicks = 0;
 			refreshProfile();
@@ -389,7 +389,7 @@ public class ImajEventsPlugin extends Plugin
 		Actor actor = event.getActor();
 		if (profile.isDeathEnabled() && actor == client.getLocalPlayer())
 		{
-			serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), baseEvent("DEATH"));
+			serviceClient.sendEvent(config.enrollmentToken(), baseEvent("DEATH"));
 		}
 	}
 
@@ -412,7 +412,7 @@ public class ImajEventsPlugin extends Plugin
 		}
 		else
 		{
-			serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+			serviceClient.sendEvent(config.enrollmentToken(), payload);
 		}
 	}
 
@@ -463,11 +463,11 @@ public class ImajEventsPlugin extends Plugin
 	private void captureAndSend(Map<String, Object> payload, SetupSnapshot setup, String title)
 	{
 		captureScreenshot(setup, title,
-			screenshot -> serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload,
+			screenshot -> serviceClient.sendEvent(config.enrollmentToken(), payload,
 				screenshot),
 			error -> {
 				log.warn("{}; sending the event without its screenshot", error);
-				serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+				serviceClient.sendEvent(config.enrollmentToken(), payload);
 			});
 	}
 
@@ -825,7 +825,7 @@ public class ImajEventsPlugin extends Plugin
 		payload.put("endingGuideValue", attempt.endingGuideValue);
 		payload.put("guideValueUsed", Math.max(0L, attempt.startingGuideValue - attempt.endingGuideValue));
 		payload.put("priceBasis", "RuneLite mapped market value with Jagex guide fallback");
-		serviceClient.sendSpecialKillEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload,
+		serviceClient.sendSpecialKillEvent(config.enrollmentToken(), payload,
 			attempt.startingScreenshot, attempt.endingScreenshot);
 		if (specialKillAttempt == attempt)
 		{
@@ -897,14 +897,14 @@ public class ImajEventsPlugin extends Plugin
 			&& acceptedTotalValue >= profile.getMinimumLootScreenshotValue())
 		{
 			captureScreenshot(null, "", screenshot ->
-				serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload, screenshot), error -> {
+				serviceClient.sendEvent(config.enrollmentToken(), payload, screenshot), error -> {
 				log.warn("{}; sending loot without a screenshot", error);
-				serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+				serviceClient.sendEvent(config.enrollmentToken(), payload);
 			});
 		}
 		else
 		{
-			serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload);
+			serviceClient.sendEvent(config.enrollmentToken(), payload);
 		}
 	}
 
@@ -963,7 +963,7 @@ public class ImajEventsPlugin extends Plugin
 		{
 			return;
 		}
-		serviceClient.refreshProfile(config.serviceBaseUrl(), config.enrollmentToken(), this::applyProfile,
+		serviceClient.refreshProfile(config.enrollmentToken(), this::applyProfile,
 			error -> {
 				log.debug("Unable to refresh Imaj's Events profile: {}", error);
 				if (panel != null)
@@ -976,7 +976,6 @@ public class ImajEventsPlugin extends Plugin
 	private boolean isConnected()
 	{
 		return config.thirdPartyConnection()
-			&& !config.serviceBaseUrl().trim().isEmpty()
 			&& !config.enrollmentToken().trim().isEmpty();
 	}
 

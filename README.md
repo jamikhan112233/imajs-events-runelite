@@ -4,6 +4,8 @@ Imaj's Events is an opt-in RuneLite competition client. RuneLite detects enabled
 
 A participant enrolls with a competition name, competition password, and the RuneScape name registered for that event. The service returns a server-owned profile that controls exactly which supported notifications may be sent.
 
+The plugin connects only to the official Imaj's Events service at `https://imajs-events-service.imajs-events.workers.dev`. Participants cannot redirect event or screenshot uploads to another host.
+
 ## Supported profile settings
 
 The competition service can independently enable:
@@ -82,9 +84,15 @@ The plugin evaluates only RuneLite `GAMEMESSAGE` and `SPAM` system-message types
 
 ## Privacy
 
-The network connection is opt-in and disabled by default. When enabled, requests necessarily disclose the user's IP address to the configured Imaj's Events service. Enrollment sends the participant-entered competition name, password, and RSN. Event requests send the enabled event details and can include combined setup risk-value totals and optional game screenshots. Special Kill sends its selected boss, the official game-generated completion time, starting/ending risk totals, and two screenshots.
+The network connection is opt-in and disabled by default. When enabled, requests necessarily disclose the user's IP address to the official Imaj's Events service. Enrollment sends the participant-entered competition name, password, and RSN. Event requests send only profile-enabled loot, level, death, kill-count/completion, speedrun, and matching system-message details. They can also include combined setup risk-value totals and separately opted-in game screenshots. Special Kill sends its selected boss, the official game-generated completion time, starting/ending risk totals, and two screenshots.
 
 The plugin does not read the currently logged-in RuneScape name and does not inspect or modify another plugin's configuration.
+
+The service stores participant identity, hashed enrollment credentials, roster data, and accepted event metadata until the competition organizer requests removal. Raw competition passwords are never stored. Uploaded screenshots are forwarded directly to the competition's Discord webhook and are not retained by the Imaj's Events service. The plugin and service have no paid or subscription-gated functionality.
+
+Questions and data-removal requests can be submitted through the [Imaj's Events service issue tracker](https://github.com/jamikhan112233/imajs-events-service/issues).
+
+See [`PRIVACY.md`](PRIVACY.md) for the complete participant-facing privacy summary.
 
 ## Development
 
@@ -110,7 +118,7 @@ For Jagex Accounts, follow RuneLite's [Using Jagex Accounts](https://github.com/
 Test the following manually in game:
 
 1. Leave **Enable event connection** off and confirm enrollment is refused.
-2. Enable it, enter the Worker HTTPS URL, and enroll with a valid competition, password, and RSN.
+2. Enable it and enroll with a valid competition, password, and RSN. The official Worker URL is built into the plugin.
 3. Confirm qualifying loot, enabled kill counts, times, and custom system messages reach only the competition webhook.
 4. Confirm disabled event types, nonmatching messages, and loot below the configured minimum are not posted.
 5. Complete an activity and verify the screenshot's item-value lines and total match the setup while the KC webhook text omits the value.

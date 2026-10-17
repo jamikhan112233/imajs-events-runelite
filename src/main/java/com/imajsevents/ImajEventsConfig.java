@@ -27,7 +27,7 @@ public interface ImajEventsConfig extends Config
 	@ConfigItem(
 		keyName = "thirdPartyConnection",
 		name = "Enable event connection",
-		description = "Allows this plugin to send enrolled competition events to the configured service",
+		description = "Allows this plugin to send enrolled competition events to the official Imaj's Events service",
 		position = 0,
 		section = connectionSection,
 		warning = "This feature submits your IP address to a 3rd-party server not controlled or verified by RuneLite developers"
@@ -38,24 +38,12 @@ public interface ImajEventsConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "serviceBaseUrl",
-		name = "Service URL",
-		description = "Base URL supplied by the Imaj's Events organizer",
-		position = 1,
-		section = connectionSection
-	)
-	default String serviceBaseUrl()
-	{
-		return "";
-	}
-
-	@ConfigItem(
 		keyName = "completionScreenshots",
 		name = "Upload completion screenshots",
 		description = "When the competition profile also permits it, attach a screenshot to kill-count and completion reports",
 		position = 0,
 		section = screenshotSection,
-		warning = "Screenshots may contain visible game information and are sent to the configured 3rd-party service"
+		warning = "Screenshots may contain visible game information and are sent to the official Imaj's Events 3rd-party service"
 	)
 	default boolean completionScreenshots()
 	{
@@ -80,7 +68,7 @@ public interface ImajEventsConfig extends Config
 		description = "When the competition profile permits it, attach a screenshot to each qualifying Loot Tracker item",
 		position = 2,
 		section = screenshotSection,
-		warning = "Screenshots may contain visible game information and are sent to the configured 3rd-party service"
+		warning = "Screenshots may contain visible game information and are sent to the official Imaj's Events 3rd-party service"
 	)
 	default boolean lootScreenshots()
 	{

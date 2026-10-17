@@ -11,22 +11,16 @@ import static org.junit.Assert.assertTrue;
 public class ServiceUrlsTest
 {
 	@Test
-	public void removesTrailingSlashes()
+	public void usesOfficialServiceUrl()
 	{
-		assertEquals("https://events.example/api/v1/profile",
-			ServiceUrls.endpoint(" https://events.example/// ", "/api/v1/profile"));
+		assertEquals("https://imajs-events-service.imajs-events.workers.dev/api/v1/profile",
+			ServiceUrls.endpoint("/api/v1/profile"));
 	}
 
 	@Test(expected = IllegalArgumentException.class)
-	public void rejectsPlainHttpAwayFromLocalhost()
+	public void rejectsInvalidServicePath()
 	{
-		ServiceUrls.normalizeBaseUrl("http://events.example");
-	}
-
-	@Test
-	public void permitsLocalDevelopment()
-	{
-		assertEquals("http://127.0.0.1:8787", ServiceUrls.normalizeBaseUrl("http://127.0.0.1:8787/"));
+		ServiceUrls.endpoint("api/v1/profile");
 	}
 
 	@Test

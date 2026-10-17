@@ -34,51 +34,51 @@ class ImajEventsServiceClient
 		this.gson = gson;
 	}
 
-	void enroll(String baseUrl, String competition, char[] password, String rsn,
+	void enroll(String competition, char[] password, String rsn,
 		Consumer<EnrollmentResponse> success, Consumer<String> failure)
 	{
 		Map<String, String> payload = new LinkedHashMap<>();
 		payload.put("competition", competition.trim());
 		payload.put("password", new String(password));
 		payload.put("rsn", rsn.trim());
-		post(baseUrl, "/api/v1/enroll", null, payload, EnrollmentResponse.class, success, failure);
+		post("/api/v1/enroll", null, payload, EnrollmentResponse.class, success, failure);
 		java.util.Arrays.fill(password, '\0');
 	}
 
-	void refreshProfile(String baseUrl, String token, Consumer<CompetitionProfile> success, Consumer<String> failure)
+	void refreshProfile(String token, Consumer<CompetitionProfile> success, Consumer<String> failure)
 	{
-		request(baseUrl, "/api/v1/profile", token, "GET", null, CompetitionProfile.class, success, failure);
+		request("/api/v1/profile", token, "GET", null, CompetitionProfile.class, success, failure);
 	}
 
-	void changeRsn(String baseUrl, String token, String newRsn, String code,
+	void changeRsn(String token, String newRsn, String code,
 		Consumer<CompetitionProfile> success, Consumer<String> failure)
 	{
 		Map<String, String> payload = new LinkedHashMap<>();
 		payload.put("newRsn", newRsn.trim());
 		payload.put("code", code.trim());
-		post(baseUrl, "/api/v1/rsn-change", token, payload, CompetitionProfile.class, success, failure);
+		post("/api/v1/rsn-change", token, payload, CompetitionProfile.class, success, failure);
 	}
 
-	void sendEvent(String baseUrl, String token, Map<String, Object> payload)
+	void sendEvent(String token, Map<String, Object> payload)
 	{
-		post(baseUrl, "/api/v1/events", token, payload, EmptyResponse.class,
+		post("/api/v1/events", token, payload, EmptyResponse.class,
 			ignored -> log.debug("Imaj's Events notification accepted"),
 			error -> log.debug("Imaj's Events notification failed: {}", error));
 	}
 
-	void sendEvent(String baseUrl, String token, Map<String, Object> payload, byte[] screenshot)
+	void sendEvent(String token, Map<String, Object> payload, byte[] screenshot)
 	{
 		if (screenshot == null || screenshot.length == 0)
 		{
-			sendEvent(baseUrl, token, payload);
+			sendEvent(token, payload);
 			return;
 		}
 		Map<String, Upload> uploads = new LinkedHashMap<>();
 		uploads.put("file", new Upload("completion.jpg", screenshot));
-		sendMultipartEvent(baseUrl, token, payload, uploads);
+		sendMultipartEvent(token, payload, uploads);
 	}
 
-	void sendSpecialKillEvent(String baseUrl, String token, Map<String, Object> payload,
+	void sendSpecialKillEvent(String token, Map<String, Object> payload,
 		byte[] startingScreenshot, byte[] endingScreenshot)
 	{
 		if (startingScreenshot == null || startingScreenshot.length == 0
@@ -90,16 +90,16 @@ class ImajEventsServiceClient
 		Map<String, Upload> uploads = new LinkedHashMap<>();
 		uploads.put("start_file", new Upload("special-kill-start.jpg", startingScreenshot));
 		uploads.put("end_file", new Upload("special-kill-end.jpg", endingScreenshot));
-		sendMultipartEvent(baseUrl, token, payload, uploads);
+		sendMultipartEvent(token, payload, uploads);
 	}
 
-	private void sendMultipartEvent(String baseUrl, String token, Map<String, Object> payload,
+	private void sendMultipartEvent(String token, Map<String, Object> payload,
 		Map<String, Upload> uploads)
 	{
 		final String url;
 		try
 		{
-			url = ServiceUrls.endpoint(baseUrl, "/api/v1/events");
+			url = ServiceUrls.endpoint("/api/v1/events");
 		}
 		catch (IllegalArgumentException ex)
 		{
@@ -152,19 +152,19 @@ class ImajEventsServiceClient
 		});
 	}
 
-	private <T> void post(String baseUrl, String path, String token, Object payload, Class<T> responseType,
+	private <T> void post(String path, String token, Object payload, Class<T> responseType,
 		Consumer<T> success, Consumer<String> failure)
 	{
-		request(baseUrl, path, token, "POST", gson.toJson(payload), responseType, success, failure);
+		request(path, token, "POST", gson.toJson(payload), responseType, success, failure);
 	}
 
-	private <T> void request(String baseUrl, String path, String token, String method, String json,
+	private <T> void request(String path, String token, String method, String json,
 		Class<T> responseType, Consumer<T> success, Consumer<String> failure)
 	{
 		final String url;
 		try
 		{
-			url = ServiceUrls.endpoint(baseUrl, path);
+			url = ServiceUrls.endpoint(path);
 		}
 		catch (IllegalArgumentException ex)
 		{

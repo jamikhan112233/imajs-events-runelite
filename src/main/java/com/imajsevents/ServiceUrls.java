@@ -2,26 +2,18 @@ package com.imajsevents;
 
 final class ServiceUrls
 {
+	static final String SERVICE_BASE_URL = "https://imajs-events-service.imajs-events.workers.dev";
+
 	private ServiceUrls()
 	{
 	}
 
-	static String normalizeBaseUrl(String raw)
+	static String endpoint(String path)
 	{
-		String value = raw == null ? "" : raw.trim();
-		while (value.endsWith("/"))
+		if (path == null || !path.startsWith("/"))
 		{
-			value = value.substring(0, value.length() - 1);
+			throw new IllegalArgumentException("Service path must start with /");
 		}
-		if (!value.startsWith("https://") && !value.startsWith("http://localhost") && !value.startsWith("http://127.0.0.1"))
-		{
-			throw new IllegalArgumentException("Use an HTTPS service URL");
-		}
-		return value;
-	}
-
-	static String endpoint(String rawBaseUrl, String path)
-	{
-		return normalizeBaseUrl(rawBaseUrl) + path;
+		return SERVICE_BASE_URL + path;
 	}
 }
