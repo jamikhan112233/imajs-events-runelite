@@ -56,6 +56,26 @@ public class ServiceUrlsTest
 	}
 
 	@Test
+	public void lootValueAndAllowlistCanUseAndOrModes()
+	{
+		assertFalse(ImajEventsPlugin.lootItemAccepted(
+			Arrays.asList("Twisted bow"), Collections.emptyList(), "Twisted bow", 20997,
+			500L, 1_000L, true));
+		assertTrue(ImajEventsPlugin.lootItemAccepted(
+			Arrays.asList("Twisted bow"), Collections.emptyList(), "Twisted bow", 20997,
+			500L, 1_000L, false));
+		assertFalse(ImajEventsPlugin.lootItemAccepted(
+			Arrays.asList("Twisted bow"), Collections.emptyList(), "Coins", 995,
+			2_000L, 1_000L, true));
+		assertTrue(ImajEventsPlugin.lootItemAccepted(
+			Arrays.asList("Twisted bow"), Collections.emptyList(), "Coins", 995,
+			2_000L, 1_000L, false));
+		assertFalse(ImajEventsPlugin.lootItemAccepted(
+			Collections.emptyList(), Arrays.asList("Coins"), "Coins", 995,
+			2_000L, 1_000L, false));
+	}
+
+	@Test
 	public void specialKillBossMatchingIgnoresCaseSpacesAndPunctuation()
 	{
 		assertTrue(ImajEventsPlugin.bossNamesMatch("Theatre of Blood", "THEATRE-OF-BLOOD"));
