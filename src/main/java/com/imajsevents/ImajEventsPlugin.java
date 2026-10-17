@@ -30,6 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Actor;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.GameState;
 import net.runelite.api.Item;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
@@ -234,6 +235,40 @@ public class ImajEventsPlugin extends Plugin
 		specialKillPreparing = false;
 		specialKillAttempt = null;
 		specialKillGeneration++;
+	}
+
+	void checkCurrentValue(Consumer<ValueCheckResult> success, Consumer<String> failure)
+	{
+		clientThread.invokeLater(() -> {
+			if (client.getGameState() != GameState.LOGGED_IN)
+			{
+				onUi(() -> failure.accept("Log in before using Value Check"));
+				return;
+			}
+			try
+			{
+				SetupSnapshot setup = currentSetupSnapshot();
+				long equipmentValue = totalSetupValue(setup.equipment);
+				long inventoryValue = totalSetupValue(setup.inventory);
+				ValueCheckResult result = new ValueCheckResult(equipmentValue, inventoryValue);
+				onUi(() -> success.accept(result));
+			}
+			catch (RuntimeException ex)
+			{
+				log.warn("Unable to calculate current setup value", ex);
+				onUi(() -> failure.accept("Unable to calculate current value"));
+			}
+		});
+	}
+
+	private static long totalSetupValue(List<SetupItem> items)
+	{
+		long total = 0L;
+		for (SetupItem item : items)
+		{
+			total += item.totalValue;
+		}
+		return total;
 	}
 
 	@Subscribe
@@ -1045,6 +1080,33 @@ public class ImajEventsPlugin extends Plugin
 		{
 			this.value = value;
 			this.source = source;
+		}
+	}
+
+	static final class ValueCheckResult
+	{
+		private final long equipmentValue;
+		private final long inventoryValue;
+
+		private ValueCheckResult(long equipmentValue, long inventoryValue)
+		{
+			this.equipmentValue = equipmentValue;
+			this.inventoryValue = inventoryValue;
+		}
+
+		long getEquipmentValue()
+		{
+			return equipmentValue;
+		}
+
+		long getInventoryValue()
+		{
+			return inventoryValue;
+		}
+
+		long getTotalValue()
+		{
+			return equipmentValue + inventoryValue;
 		}
 	}
 }
