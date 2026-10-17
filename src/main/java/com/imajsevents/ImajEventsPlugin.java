@@ -461,7 +461,7 @@ public class ImajEventsPlugin extends Plugin
 
 	private void sendPendingPet()
 	{
-		if (pendingPetTicks <= 0 || !isRegisteredCharacterLoggedIn())
+		if (pendingPetMessage == null || !isRegisteredCharacterLoggedIn())
 		{
 			resetPendingPet();
 			return;
