@@ -452,6 +452,10 @@ public class ImajEventsPlugin extends Plugin
 			if (item.find())
 			{
 				pendingPetName = item.group("pet").trim();
+				if (pendingPetName.endsWith("."))
+				{
+					pendingPetName = pendingPetName.substring(0, pendingPetName.length() - 1).trim();
+				}
 				sendPendingPet();
 				return true;
 			}
