@@ -5,6 +5,8 @@ import java.awt.Color;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.text.NumberFormat;
+import java.util.Locale;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JLabel;
@@ -28,8 +30,10 @@ class ImajEventsPanel extends PluginPanel
 	private final JTextField specialKillBossField = new JTextField();
 	private final JButton startSpecialKillButton = new JButton("Start Special Kill");
 	private final JButton cancelSpecialKillButton = new JButton("Cancel Special Kill");
+	private final JButton valueCheckButton = new JButton("Value Check");
 	private final JLabel statusLabel = new JLabel("Not enrolled");
 	private final JLabel specialKillStatusLabel = new JLabel("No Special Kill active");
+	private final JLabel valueCheckStatusLabel = new JLabel("No value check yet");
 
 	ImajEventsPanel(ImajEventsPlugin plugin)
 	{
@@ -76,6 +80,21 @@ class ImajEventsPanel extends PluginPanel
 		form.add(specialKillStatusLabel, gbc);
 		gbc.gridy++;
 
+		JLabel valueCheckTitle = new JLabel("Current gear and inventory value");
+		valueCheckTitle.setBorder(BorderFactory.createEmptyBorder(14, 0, 2, 0));
+		form.add(valueCheckTitle, gbc);
+		gbc.gridy++;
+		form.add(valueCheckButton, gbc);
+		gbc.gridy++;
+		valueCheckStatusLabel.setForeground(Color.LIGHT_GRAY);
+		valueCheckStatusLabel.setBorder(BorderFactory.createEmptyBorder(4, 0, 0, 0));
+		form.add(valueCheckStatusLabel, gbc);
+		gbc.gridy++;
+		JLabel valueCheckPrivacyLabel = new JLabel("Local only — nothing is sent");
+		valueCheckPrivacyLabel.setForeground(Color.GRAY);
+		form.add(valueCheckPrivacyLabel, gbc);
+		gbc.gridy++;
+
 		statusLabel.setForeground(Color.LIGHT_GRAY);
 		statusLabel.setBorder(BorderFactory.createEmptyBorder(12, 0, 0, 0));
 		form.add(statusLabel, gbc);
@@ -84,7 +103,28 @@ class ImajEventsPanel extends PluginPanel
 		changeRsnButton.addActionListener(event -> changeRsn());
 		startSpecialKillButton.addActionListener(event -> startSpecialKill());
 		cancelSpecialKillButton.addActionListener(event -> cancelSpecialKill());
+		valueCheckButton.addActionListener(event -> checkCurrentValue());
 		add(form, BorderLayout.NORTH);
+	}
+
+	private void checkCurrentValue()
+	{
+		valueCheckButton.setEnabled(false);
+		valueCheckStatusLabel.setText("Calculating...");
+		plugin.checkCurrentValue(result -> {
+			valueCheckButton.setEnabled(true);
+			valueCheckStatusLabel.setText("<html>Equipment: " + formatGp(result.getEquipmentValue())
+				+ " gp<br>Inventory: " + formatGp(result.getInventoryValue())
+				+ " gp<br><b>Total: " + formatGp(result.getTotalValue()) + " gp</b></html>");
+		}, error -> {
+			valueCheckButton.setEnabled(true);
+			valueCheckStatusLabel.setText(error);
+		});
+	}
+
+	private static String formatGp(long value)
+	{
+		return NumberFormat.getIntegerInstance(Locale.US).format(value);
 	}
 
 	private void startSpecialKill()
