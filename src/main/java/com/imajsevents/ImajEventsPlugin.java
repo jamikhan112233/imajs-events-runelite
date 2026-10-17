@@ -60,7 +60,7 @@ import net.runelite.client.util.Text;
 @PluginDescriptor(
 	name = "Imaj's Events",
 	description = "Connects opted-in RuneLite events to an Imaj's Events competition",
-	tags = {"events", "competition", "loot", "levels", "kills", "speedruns"}
+	tags = {"events", "competition", "loot", "pets", "levels", "kills", "speedruns"}
 )
 public class ImajEventsPlugin extends Plugin
 {
@@ -74,6 +74,13 @@ public class ImajEventsPlugin extends Plugin
 		"(?<label>Duration|Challenge time|Completion time|Speedrun duration|Subdued in)\\s*:?\\s*" +
 			"(?<time>(?:\\d+:){1,2}\\d{2}(?:\\.\\d+)?)",
 		Pattern.CASE_INSENSITIVE);
+	private static final Pattern PET_PATTERN = Pattern.compile(
+		"You (?:have a funny feeling like you|feel something weird sneaking).*",
+		Pattern.CASE_INSENSITIVE);
+	private static final Pattern PET_ITEM_PATTERN = Pattern.compile(
+		"(?:Untradeable drop|New item added to your collection log):\\s*(?<pet>.+)",
+		Pattern.CASE_INSENSITIVE);
+	private static final int PET_WAIT_TICKS = 5;
 	private static final int MAX_CUSTOM_RULES = 50;
 	private static final float JPEG_QUALITY = 0.85f;
 
@@ -96,6 +103,10 @@ public class ImajEventsPlugin extends Plugin
 	private volatile boolean specialKillPreparing;
 	private volatile SpecialKillAttempt specialKillAttempt;
 	private volatile long specialKillGeneration;
+	private volatile int pendingPetTicks;
+	private volatile String pendingPetName;
+	private volatile String pendingPetMessage;
+	private volatile boolean pendingPetDuplicate;
 
 	@Override
 	protected void startUp()
@@ -121,6 +132,7 @@ public class ImajEventsPlugin extends Plugin
 		specialKillPreparing = false;
 		specialKillAttempt = null;
 		specialKillGeneration++;
+		resetPendingPet();
 		if (navigationButton != null)
 		{
 			clientToolbar.removeNavigation(navigationButton);
@@ -131,7 +143,7 @@ public class ImajEventsPlugin extends Plugin
 		log.info("Imaj's Events stopped");
 	}
 
-	void enroll(String competition, char[] password, String rsn,
+	void enroll(String competition, char[] password,
 		Consumer<CompetitionProfile> success, Consumer<String> failure)
 	{
 		if (!config.thirdPartyConnection())
@@ -140,42 +152,59 @@ public class ImajEventsPlugin extends Plugin
 			failure.accept("Enable the event connection in plugin settings first");
 			return;
 		}
-		if (competition.trim().isEmpty() || password.length == 0 || rsn.trim().isEmpty())
+		if (competition.trim().isEmpty() || password.length == 0)
 		{
 			java.util.Arrays.fill(password, '\0');
-			failure.accept("Competition, password, and RSN are required");
+			failure.accept("Competition and password are required");
 			return;
 		}
 
-		serviceClient.enroll(competition, password, rsn, response -> {
-			if (response.getEnrollmentToken() == null || response.getProfile() == null)
+		clientThread.invokeLater(() -> {
+			String rsn = currentLoggedInRsn();
+			if (rsn == null)
 			{
-				onUi(() -> failure.accept("The event service returned an incomplete enrollment"));
+				java.util.Arrays.fill(password, '\0');
+				onUi(() -> failure.accept("Log into the RuneScape character you want to enroll"));
 				return;
 			}
-			configManager.setConfiguration(ImajEventsConfig.GROUP, "enrollmentToken", response.getEnrollmentToken());
-			applyProfile(response.getProfile());
-			onUi(() -> success.accept(response.getProfile()));
-		}, error -> onUi(() -> failure.accept(error)));
+			serviceClient.enroll(competition, password, rsn, response -> {
+				if (response.getEnrollmentToken() == null || response.getProfile() == null)
+				{
+					onUi(() -> failure.accept("The event service returned an incomplete enrollment"));
+					return;
+				}
+				configManager.setConfiguration(ImajEventsConfig.GROUP, "enrollmentToken", response.getEnrollmentToken());
+				applyProfile(response.getProfile());
+				onUi(() -> success.accept(response.getProfile()));
+			}, error -> onUi(() -> failure.accept(error)));
+		});
 	}
 
-	void changeRsn(String newRsn, String code, Consumer<CompetitionProfile> success, Consumer<String> failure)
+	void changeRsn(String code, Consumer<CompetitionProfile> success, Consumer<String> failure)
 	{
 		if (!isConnected())
 		{
 			failure.accept("Enroll first");
 			return;
 		}
-		if (newRsn.trim().isEmpty() || code.trim().isEmpty())
+		if (code.trim().isEmpty())
 		{
-			failure.accept("New RSN and one-time code are required");
+			failure.accept("A one-time change code is required");
 			return;
 		}
-		serviceClient.changeRsn(config.enrollmentToken(), newRsn, code,
-			updated -> {
-				applyProfile(updated);
-				onUi(() -> success.accept(updated));
-			}, error -> onUi(() -> failure.accept(error)));
+		clientThread.invokeLater(() -> {
+			String newRsn = currentLoggedInRsn();
+			if (newRsn == null)
+			{
+				onUi(() -> failure.accept("Log into the renamed RuneScape character first"));
+				return;
+			}
+			serviceClient.changeRsn(config.enrollmentToken(), newRsn, code,
+				updated -> {
+					applyProfile(updated);
+					onUi(() -> success.accept(updated));
+				}, error -> onUi(() -> failure.accept(error)));
+		});
 	}
 
 	void startSpecialKill(String boss, Consumer<String> success, Consumer<String> failure)
@@ -274,7 +303,7 @@ public class ImajEventsPlugin extends Plugin
 	@Subscribe
 	public void onLootReceived(LootReceived event)
 	{
-		if (profile.isLootEnabled())
+		if (profile.isLootEnabled() && isRegisteredCharacterLoggedIn())
 		{
 			sendLoot(event.getName(), event.getItems());
 		}
@@ -283,13 +312,17 @@ public class ImajEventsPlugin extends Plugin
 	@Subscribe
 	public void onChatMessage(ChatMessage event)
 	{
-		if (!isConnected() || (event.getType() != ChatMessageType.GAMEMESSAGE
+		if (!isRegisteredCharacterLoggedIn() || (event.getType() != ChatMessageType.GAMEMESSAGE
 			&& event.getType() != ChatMessageType.SPAM))
 		{
 			return;
 		}
 
 		String message = Text.removeTags(event.getMessage()).trim();
+		if (handlePetMessage(message))
+		{
+			return;
+		}
 		if (profile.isKillCountEnabled() || specialKillAttempt != null)
 		{
 			Matcher kc = KC_PATTERN.matcher(message);
@@ -352,7 +385,8 @@ public class ImajEventsPlugin extends Plugin
 	{
 		int current = event.getLevel();
 		Integer previous = observedLevels.put(event.getSkill(), current);
-		if (!profile.isLevelEnabled() || previous == null || current <= previous)
+		if (!profile.isLevelEnabled() || !isRegisteredCharacterLoggedIn()
+			|| previous == null || current <= previous)
 		{
 			return;
 		}
@@ -365,6 +399,10 @@ public class ImajEventsPlugin extends Plugin
 	@Subscribe
 	public void onGameTick(GameTick ignored)
 	{
+		if (pendingPetTicks > 0 && --pendingPetTicks == 0)
+		{
+			sendPendingPet();
+		}
 		if (++profileRefreshTicks >= 500)
 		{
 			profileRefreshTicks = 0;
@@ -387,10 +425,74 @@ public class ImajEventsPlugin extends Plugin
 	public void onActorDeath(ActorDeath event)
 	{
 		Actor actor = event.getActor();
-		if (profile.isDeathEnabled() && actor == client.getLocalPlayer())
+		if (profile.isDeathEnabled() && isRegisteredCharacterLoggedIn()
+			&& actor == client.getLocalPlayer())
 		{
 			serviceClient.sendEvent(config.enrollmentToken(), baseEvent("DEATH"));
 		}
+	}
+
+	private boolean handlePetMessage(String message)
+	{
+		if (!profile.isPetEnabled())
+		{
+			return false;
+		}
+		if (PET_PATTERN.matcher(message).matches())
+		{
+			pendingPetTicks = PET_WAIT_TICKS;
+			pendingPetName = null;
+			pendingPetMessage = message;
+			pendingPetDuplicate = message.toLowerCase(Locale.ROOT).contains("would have been");
+			return true;
+		}
+		if (pendingPetTicks > 0)
+		{
+			Matcher item = PET_ITEM_PATTERN.matcher(message);
+			if (item.find())
+			{
+				pendingPetName = item.group("pet").trim();
+				sendPendingPet();
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private void sendPendingPet()
+	{
+		if (pendingPetTicks <= 0 || !isRegisteredCharacterLoggedIn())
+		{
+			resetPendingPet();
+			return;
+		}
+		Map<String, Object> payload = baseEvent("PET");
+		payload.put("petName", pendingPetName == null || pendingPetName.isEmpty()
+			? "Unknown pet" : pendingPetName);
+		payload.put("duplicate", pendingPetDuplicate);
+		payload.put("gameMessage", pendingPetMessage == null ? "" : pendingPetMessage);
+		resetPendingPet();
+
+		if (profile.isPetScreenshotsEnabled() && config.petScreenshots())
+		{
+			captureScreenshot(null, "", screenshot ->
+				serviceClient.sendEvent(config.enrollmentToken(), payload, screenshot), error -> {
+					log.warn("{}; sending pet without a screenshot", error);
+					serviceClient.sendEvent(config.enrollmentToken(), payload);
+				});
+		}
+		else
+		{
+			serviceClient.sendEvent(config.enrollmentToken(), payload);
+		}
+	}
+
+	private void resetPendingPet()
+	{
+		pendingPetTicks = 0;
+		pendingPetName = null;
+		pendingPetMessage = null;
+		pendingPetDuplicate = false;
 	}
 
 	private void sendKillCount(String source, int killCount)
@@ -977,6 +1079,30 @@ public class ImajEventsPlugin extends Plugin
 	{
 		return config.thirdPartyConnection()
 			&& !config.enrollmentToken().trim().isEmpty();
+	}
+
+	private String currentLoggedInRsn()
+	{
+		if (client.getGameState() != GameState.LOGGED_IN || client.getLocalPlayer() == null)
+		{
+			return null;
+		}
+		String name = client.getLocalPlayer().getName();
+		return name == null || name.trim().isEmpty() ? null : name.trim();
+	}
+
+	private boolean isRegisteredCharacterLoggedIn()
+	{
+		String current = currentLoggedInRsn();
+		String registered = profile.getRegisteredRsn();
+		return isConnected() && current != null && registered != null
+			&& normalizeRsn(current).equals(normalizeRsn(registered));
+	}
+
+	private static String normalizeRsn(String rsn)
+	{
+		return rsn.trim().replace('_', ' ').replace('-', ' ')
+			.replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
 	}
 
 	private void loadStoredProfile()
