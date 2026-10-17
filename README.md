@@ -13,6 +13,7 @@ The competition service can independently enable:
 - Player-death notifications
 - Kill-count and completion notifications
 - A combined equipment-plus-inventory risk-value total when a kill count/completion is detected
+- A local-only **Value Check** button for checking current equipment, inventory, and combined values at any time
 - Opt-in completion screenshots
 - Opt-in Special Kills with starting/ending screenshots, risk values, and the game's official completion time
 - Speedrun time notifications from game-generated completion messages
@@ -36,6 +37,8 @@ Rules accept exact item names, numeric item IDs, or case-insensitive `*` wildcar
 Item values use the following priority throughout the plugin: an organizer-defined `itemValueOverrides` entry first; RuneLite's current market value second; and the built-in Jagex item-definition guide value only when RuneLite has no market value. RuneLite's `ItemMapping` is applied even when the equipped item is untradeable, matching tradeable counterparts/components used for risk valuation. For example, Ferocious gloves use Hydra leather's current value and Amulet of rancour (s) uses the normal Amulet of rancour's current value. Override keys may be an exact case-insensitive item name or canonical numeric item ID, with the ID taking priority. An override remains available for items that have no suitable RuneLite mapping.
 
 When setup capture is enabled, the KC webhook text does not display its equipment-plus-inventory value. Its screenshot audit panel lists every line as quantity × unit value = line total and labels the source as `[override]`, `[GE]`, `[mapped]`, or `[guide]`, so the calculation can be checked without transmitting the item breakdown as event data. `[mapped]` means an untradeable item was valued through RuneLite's tradeable counterpart/component mapping.
+
+The side panel's **Value Check** button can be pressed repeatedly while logged in. It recalculates and displays the current equipment value, inventory value, and combined total using the same value rules. The check is entirely local: it does not capture a screenshot or send an event to the service or Discord.
 
 Screenshots require both sides to opt in. Completion screenshots require organizer permission plus the player's **Upload completion screenshots** switch. Loot screenshots use a separate organizer permission and local **Upload loot screenshots** switch; one captured frame is attached to the grouped source message. Setup screenshots include the total and its equipment/inventory line-item audit. Chat and private-message widgets are hidden during capture by default.
 
