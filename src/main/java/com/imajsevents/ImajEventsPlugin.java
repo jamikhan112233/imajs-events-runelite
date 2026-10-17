@@ -865,9 +865,9 @@ public class ImajEventsPlugin extends Plugin
 			String itemName = itemManager.getItemComposition(itemId).getName();
 			long unitPrice = resolveItemValue(itemId, itemName).value;
 			long totalValue = unitPrice * quantity;
-			if (totalValue < profile.getMinimumLootValue()
-				|| !lootItemAllowed(profile.getAllowedLootItems(), profile.getIgnoredLootItems(),
-					itemName, itemId))
+			if (!lootItemAccepted(profile.getAllowedLootItems(), profile.getIgnoredLootItems(),
+				itemName, itemId, totalValue, profile.getMinimumLootValue(),
+				profile.isRequireBothRarityAndValue()))
 			{
 				continue;
 			}
@@ -888,7 +888,13 @@ public class ImajEventsPlugin extends Plugin
 		Map<String, Object> payload = baseEvent("LOOT");
 		payload.put("source", source == null ? "Unknown" : source);
 		payload.put("items", acceptedItems);
-		if (profile.isLootScreenshotsEnabled() && config.lootScreenshots())
+		long acceptedTotalValue = 0L;
+		for (Map<String, Object> item : acceptedItems)
+		{
+			acceptedTotalValue += ((Number) item.get("totalValue")).longValue();
+		}
+		if (profile.isLootScreenshotsEnabled() && config.lootScreenshots()
+			&& acceptedTotalValue >= profile.getMinimumLootScreenshotValue())
 		{
 			captureScreenshot(null, "", screenshot ->
 				serviceClient.sendEvent(config.serviceBaseUrl(), config.enrollmentToken(), payload, screenshot), error -> {
@@ -909,6 +915,21 @@ public class ImajEventsPlugin extends Plugin
 			return false;
 		}
 		return allowed == null || allowed.isEmpty() || matchesLootRule(allowed, itemName, itemId);
+	}
+
+	static boolean lootItemAccepted(List<String> allowed, List<String> ignored, String itemName, int itemId,
+		long totalValue, long minimumValue, boolean requireBoth)
+	{
+		if (matchesLootRule(ignored, itemName, itemId))
+		{
+			return false;
+		}
+		boolean hasAllowlist = allowed != null && !allowed.isEmpty();
+		boolean matchesAllowlist = hasAllowlist && matchesLootRule(allowed, itemName, itemId);
+		boolean meetsMinimum = totalValue >= minimumValue;
+		return requireBoth
+			? (!hasAllowlist || matchesAllowlist) && meetsMinimum
+			: matchesAllowlist || meetsMinimum;
 	}
 
 	private static boolean matchesLootRule(List<String> rules, String itemName, int itemId)
