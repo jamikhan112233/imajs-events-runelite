@@ -19,6 +19,8 @@ public class CompetitionProfile
 	private List<String> ignoredLootItems = new ArrayList<>();
 	private Map<String, Long> itemValueOverrides = new LinkedHashMap<>();
 	private boolean lootScreenshotsEnabled;
+	private boolean petEnabled;
+	private boolean petScreenshotsEnabled;
 	private boolean levelEnabled;
 	private boolean deathEnabled;
 	private boolean killCountEnabled;
