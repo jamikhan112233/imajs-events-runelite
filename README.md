@@ -2,7 +2,7 @@
 
 Imaj's Events is an opt-in RuneLite competition client. RuneLite detects enabled in-game event signals and reports them to an event service, which records and forwards them for competition use.
 
-A participant enrolls with a competition name, competition password, and the RuneScape name registered for that event. The service returns a server-owned profile that controls exactly which supported notifications may be sent.
+A participant logs into RuneScape and enrolls with a competition name and competition password. The plugin reads the currently logged-in character name; there is no editable enrollment RSN field. The service returns a server-owned profile that controls exactly which supported notifications may be sent.
 
 The plugin connects only to the official Imaj's Events service at `https://imajs-events-service.imajs-events.workers.dev`. Participants cannot redirect event or screenshot uploads to another host.
 
@@ -11,6 +11,7 @@ The plugin connects only to the official Imaj's Events service at `https://imajs
 The competition service can independently enable:
 
 - Grouped Loot Tracker notifications, a minimum per-item stack value, organizer-owned allow/ignore item rules, and separately opt-in screenshots
+- Pet-drop notifications identified from the game's pet message plus its untradeable-drop or collection-log item name, with separately opt-in screenshots
 - Level-up notifications
 - Player-death notifications
 - Kill-count and completion notifications
@@ -22,6 +23,15 @@ The competition service can independently enable:
 - Custom system/game-message rules using case-insensitive `*` wildcards
 
 Profiles refresh when the plugin starts and approximately every five minutes.
+
+For reliable pet names, enable RuneScape's untradeable-drop notifications. The plugin waits up to five game ticks after a pet message for the matching item-name message; if the game does not expose the name, the event is sent as `Unknown pet` and Battleships will not guess a tile.
+
+
+## Character-bound enrollment
+
+Enrollment always uses the character currently logged into RuneLite. Every outbound event is also blocked unless the logged-in character matches the registered RSN. Re-enrolling the same approved roster RSN rotates the old token, so an abandoned client cannot permanently lock that roster entry.
+
+For a legitimate RuneScape name change, obtain a one-time organizer code, log into the renamed character, and enter only the code. The new RSN is read from the active character instead of typed manually.
 
 ## Loot items and organizer filters
 
