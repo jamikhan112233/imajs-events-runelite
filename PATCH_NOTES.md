@@ -1,10 +1,9 @@
 # Patch notes
 
-## 0.4.0 — Budget kills and group verification
+## 0.4.0 — Special Kill integration improvements
 
-- Added `DKs` as a Special Kill target. One attempt completes only after Rex, Prime, and Supreme have all been killed.
-- Special Kill submissions now include nearby player names so team group kills can require matching submissions from every participant.
-- Special Kill submissions now include whether the starting setup contained a Twisted bow, Scythe of vitur, or Tumeken's shadow for the Inferno no-megas rule.
+- Added organizer-defined Special Kill validation support.
+- Special Kill submissions can include nearby player names and limited validation metadata when enabled by the competition profile.
 - Updated the plugin description to: `Connects your RuneLite client to a competition hosted by Imaj's Events`.
 
 ## 0.3.0 — Pet events and safer enrollment
