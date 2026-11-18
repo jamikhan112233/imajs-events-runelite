@@ -58,12 +58,12 @@ Screenshots require both sides to opt in. Completion screenshots require organiz
 
 Special Kill is inactive unless the player explicitly uses the side panel:
 
-1. Enter the boss name as it appears in the boss's game-generated KC message. Enter `DKs` to record one Dagannoth Kings set without restarting Special Kill between Rex, Prime, and Supreme.
+1. Enter the target name provided in the unlocked event instructions.
 2. Press **Start Special Kill** to capture the starting frame and combined risk value.
 3. Complete that selected boss. Other boss completions do not end the attempt.
-4. The matching KC message captures the ending frame and value. The report waits for the game's `Duration`, `Challenge time`, `Completion time`, `Speedrun duration`, or `Subdued in` chat line, then sends that official time with both screenshots and risk totals. The `DKs` set completes after all three unique Kings and does not require a game time because Dagannoth Kings do not provide one.
+4. The matching KC message captures the ending frame and value. When the activity provides an official game time, the report waits for that chat line before sending both screenshots and risk totals.
 
-Special Kill also reports the RuneScape names visible in the loaded scene at completion and whether the starting setup contained a Twisted bow, Scythe of vitur, or Tumeken's shadow. Competition integrations can use the scene roster to require every participant to submit the same group kill and can enforce a no-megarares rule without transmitting the full item list.
+Special Kill can also report the RuneScape names visible in the loaded scene at completion and limited server-defined validation metadata. These fields support organizer-defined rules without transmitting the full equipment or inventory item list.
 
 The Special Kill report replaces the ordinary KC report so Discord does not receive a duplicate. The player can cancel an active attempt at any time, and restarting RuneLite clears it.
 
