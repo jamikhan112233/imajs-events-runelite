@@ -11,10 +11,12 @@ import java.io.IOException;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -34,6 +36,7 @@ import net.runelite.api.GameState;
 import net.runelite.api.Item;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
+import net.runelite.api.Player;
 import net.runelite.client.game.ItemStack;
 import net.runelite.api.Skill;
 import net.runelite.api.events.ActorDeath;
@@ -59,7 +62,7 @@ import net.runelite.client.util.Text;
 @Slf4j
 @PluginDescriptor(
 	name = "Imaj's Events",
-	description = "Connects opted-in RuneLite events to an Imaj's Events competition",
+	description = "Connects your RuneLite client to a competition hosted by Imaj's Events",
 	tags = {"events", "competition", "loot", "pets", "levels", "kills", "speedruns"}
 )
 public class ImajEventsPlugin extends Plugin
@@ -83,6 +86,9 @@ public class ImajEventsPlugin extends Plugin
 	private static final int PET_WAIT_TICKS = 5;
 	private static final int MAX_CUSTOM_RULES = 50;
 	private static final float JPEG_QUALITY = 0.85f;
+	private static final String DAGANNOTH_KINGS = "Dagannoth Kings";
+	private static final Set<String> DAGANNOTH_KING_NAMES = Set.of(
+		"dagannothrex", "dagannothprime", "dagannothsupreme");
 
 	@Inject private Client client;
 	@Inject private ClientThread clientThread;
@@ -246,7 +252,11 @@ public class ImajEventsPlugin extends Plugin
 					return;
 				}
 				specialKillPreparing = false;
-				specialKillAttempt = new SpecialKillAttempt(selectedBoss, startingSetup.totalValue, screenshot);
+				specialKillAttempt = new SpecialKillAttempt(
+					selectedBoss,
+					startingSetup.totalValue,
+					containsMegaRare(startingSetup),
+					screenshot);
 				onUi(() -> success.accept("Recording " + selectedBoss + " — waiting for its KC message"));
 			}, error -> {
 				if (generation != specialKillGeneration)
@@ -855,9 +865,29 @@ public class ImajEventsPlugin extends Plugin
 		{
 			return true;
 		}
+
+		if (isDagannothKingsSelection(attempt.boss))
+		{
+			String king = normalizeBossName(detectedBoss);
+			attempt.dagannothKingsCompleted.add(king);
+			if (attempt.dagannothKingsCompleted.size() < DAGANNOTH_KING_NAMES.size())
+			{
+				if (panel != null)
+				{
+					panel.showSpecialKillStatus(
+						"DKs recorded " + attempt.dagannothKingsCompleted.size() + "/3 — keep going");
+				}
+				return true;
+			}
+			detectedBoss = DAGANNOTH_KINGS;
+			attempt.gameTime = "N/A";
+			attempt.gameTimeMessage = "Dagannoth Kings set completed";
+		}
+
 		attempt.bossCompleted = true;
 		attempt.detectedBoss = detectedBoss;
 		attempt.killCount = killCount;
+		attempt.nearbyPlayers = currentNearbyPlayerNames();
 		SetupSnapshot endingSetup = currentSetupSnapshot();
 		attempt.endingGuideValue = endingSetup.totalValue;
 
@@ -930,6 +960,8 @@ public class ImajEventsPlugin extends Plugin
 		payload.put("startingGuideValue", attempt.startingGuideValue);
 		payload.put("endingGuideValue", attempt.endingGuideValue);
 		payload.put("guideValueUsed", Math.max(0L, attempt.startingGuideValue - attempt.endingGuideValue));
+		payload.put("nearbyPlayers", attempt.nearbyPlayers);
+		payload.put("startingContainsMegaRare", attempt.startingContainsMegaRare);
 		payload.put("priceBasis", "RuneLite mapped market value with Jagex guide fallback");
 		serviceClient.sendSpecialKillEvent(config.enrollmentToken(), payload,
 			attempt.startingScreenshot, attempt.endingScreenshot);
@@ -941,7 +973,65 @@ public class ImajEventsPlugin extends Plugin
 
 	static boolean bossNamesMatch(String selectedBoss, String detectedBoss)
 	{
+		if (isDagannothKingsSelection(selectedBoss))
+		{
+			return DAGANNOTH_KING_NAMES.contains(normalizeBossName(detectedBoss));
+		}
 		return normalizeBossName(selectedBoss).equals(normalizeBossName(detectedBoss));
+	}
+
+	private static boolean isDagannothKingsSelection(String value)
+	{
+		String normalized = normalizeBossName(value);
+		return "dks".equals(normalized)
+			|| "dagannothking".equals(normalized)
+			|| "dagannothkings".equals(normalized);
+	}
+
+	private List<String> currentNearbyPlayerNames()
+	{
+		Map<String, String> players = new LinkedHashMap<>();
+		for (Player player : client.getPlayers())
+		{
+			if (player == null || player.getName() == null)
+			{
+				continue;
+			}
+			String name = Text.removeTags(player.getName()).trim();
+			String normalized = normalizeBossName(name);
+			if (!normalized.isEmpty())
+			{
+				players.putIfAbsent(normalized, name);
+			}
+		}
+		return new ArrayList<>(players.values());
+	}
+
+	private static boolean containsMegaRare(SetupSnapshot setup)
+	{
+		for (SetupItem item : setup.equipment)
+		{
+			if (isMegaRareItemName(item.name))
+			{
+				return true;
+			}
+		}
+		for (SetupItem item : setup.inventory)
+		{
+			if (isMegaRareItemName(item.name))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	static boolean isMegaRareItemName(String name)
+	{
+		String normalized = normalizeBossName(name);
+		return normalized.startsWith("twistedbow")
+			|| normalized.startsWith("scytheofvitur")
+			|| normalized.startsWith("tumekensshadow");
 	}
 
 	private static String normalizeBossName(String value)
@@ -1171,7 +1261,9 @@ public class ImajEventsPlugin extends Plugin
 	{
 		private final String boss;
 		private final long startingGuideValue;
+		private final boolean startingContainsMegaRare;
 		private final byte[] startingScreenshot;
+		private final Set<String> dagannothKingsCompleted = new LinkedHashSet<>();
 		private volatile boolean bossCompleted;
 		private volatile String detectedBoss;
 		private volatile int killCount;
@@ -1179,12 +1271,15 @@ public class ImajEventsPlugin extends Plugin
 		private volatile byte[] endingScreenshot;
 		private volatile String gameTime;
 		private volatile String gameTimeMessage;
+		private volatile List<String> nearbyPlayers = new ArrayList<>();
 		private boolean sent;
 
-		private SpecialKillAttempt(String boss, long startingGuideValue, byte[] startingScreenshot)
+		private SpecialKillAttempt(String boss, long startingGuideValue,
+			boolean startingContainsMegaRare, byte[] startingScreenshot)
 		{
 			this.boss = boss;
 			this.startingGuideValue = startingGuideValue;
+			this.startingContainsMegaRare = startingContainsMegaRare;
 			this.startingScreenshot = startingScreenshot;
 		}
 	}

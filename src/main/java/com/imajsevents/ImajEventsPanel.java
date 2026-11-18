@@ -74,7 +74,7 @@ class ImajEventsPanel extends PluginPanel
 		specialKillTitle.setBorder(BorderFactory.createEmptyBorder(14, 0, 2, 0));
 		form.add(specialKillTitle, gbc);
 		gbc.gridy++;
-		addLabelAndField(form, gbc, "Boss name from the KC message", specialKillBossField);
+		addLabelAndField(form, gbc, "KC boss name (or DKs for all three Kings)", specialKillBossField);
 		form.add(startSpecialKillButton, gbc);
 		gbc.gridy++;
 		form.add(cancelSpecialKillButton, gbc);

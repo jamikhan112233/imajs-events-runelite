@@ -14,7 +14,7 @@ After enrollment, the plugin may send the following only when enabled by the com
 - matching system/game messages selected by organizer-owned wildcard rules;
 - combined equipment and inventory risk-value totals;
 - optional loot, pet, and completion game-view screenshots separately enabled by the participant; and
-- explicitly started Special Kill details, two screenshots, risk totals, and the official game-generated completion time.
+- explicitly started Special Kill details, two screenshots, risk totals, the official game-generated completion time when available, the RuneScape names visible in the loaded scene at completion, and a boolean indicating whether the starting setup contained a Twisted bow, Scythe of vitur, or Tumeken's shadow.
 
 Requests necessarily disclose the participant's IP address to the service. Custom rules do not inspect player chat, clan chat, friends chat, or private messages. The local Value Check feature sends nothing.
 
