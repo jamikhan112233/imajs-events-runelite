@@ -884,8 +884,9 @@ public class ImajEventsPlugin extends Plugin
 			attempt.gameTimeMessage = "Dagannoth Kings set completed";
 		}
 
+		final String completedBoss = detectedBoss;
 		attempt.bossCompleted = true;
-		attempt.detectedBoss = detectedBoss;
+		attempt.detectedBoss = completedBoss;
 		attempt.killCount = killCount;
 		attempt.nearbyPlayers = currentNearbyPlayerNames();
 		SetupSnapshot endingSetup = currentSetupSnapshot();
@@ -893,7 +894,7 @@ public class ImajEventsPlugin extends Plugin
 
 		if (panel != null)
 		{
-			panel.showSpecialKillStatus("Finishing " + detectedBoss + "...");
+			panel.showSpecialKillStatus("Finishing " + completedBoss + "...");
 		}
 		captureScreenshot(endingSetup, "Special Kill — ending setup", endingScreenshot -> {
 			attempt.endingScreenshot = endingScreenshot;
@@ -910,7 +911,7 @@ public class ImajEventsPlugin extends Plugin
 			{
 				specialKillAttempt = null;
 			}
-			sendKillCount(detectedBoss, killCount);
+			sendKillCount(completedBoss, killCount);
 			if (panel != null)
 			{
 				panel.showSpecialKillStatus("Screenshot failed; normal completion sent");
