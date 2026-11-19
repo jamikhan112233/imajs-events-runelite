@@ -10,6 +10,17 @@ public interface ImajEventsConfig extends Config
 {
 	String GROUP = "imajs-events";
 
+	@ConfigItem(
+		keyName = "lastUpdateNoticeVersion",
+		name = "Last update notice version",
+		description = "Last plugin release shown in local chat for this RuneLite profile",
+		hidden = true
+	)
+	default String lastUpdateNoticeVersion()
+	{
+		return "";
+	}
+
 	@ConfigSection(
 		name = "Connection",
 		description = "Connection to the Imaj's Events service",

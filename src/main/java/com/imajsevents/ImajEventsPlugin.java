@@ -409,6 +409,10 @@ public class ImajEventsPlugin extends Plugin
 	@Subscribe
 	public void onGameTick(GameTick ignored)
 	{
+		PluginUpdateNotice.showIfNeeded(client.getGameState() == GameState.LOGGED_IN,
+			config.lastUpdateNoticeVersion(),
+			message -> client.addChatMessage(ChatMessageType.CONSOLE, "", message, null),
+			version -> configManager.setConfiguration(ImajEventsConfig.GROUP, "lastUpdateNoticeVersion", version));
 		if (pendingPetTicks > 0 && --pendingPetTicks == 0)
 		{
 			sendPendingPet();
